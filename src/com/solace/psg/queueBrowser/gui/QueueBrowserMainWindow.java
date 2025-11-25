@@ -166,52 +166,19 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 				@Override
 				public void mouseClicked(MouseEvent e) {
 					int row = table.rowAtPoint(e.getPoint());
-					if (row >= 0) {
-						table.setRowSelectionInterval(row, row);
-						onSelectQueue(table, row);
-					}
+					onSelectQueue(table, row);
 				}
 				@Override
 			    public void mousePressed(MouseEvent e) {
 			        if (e.getClickCount() == 2) {
 			            int row = table.rowAtPoint(e.getPoint());
-			            logger.info("Double-clicked row: " + row);
 			            System.out.println("Double-clicked row: " + row);
-			            
-			            // Ensure the row is selected before processing
-			            if (row >= 0 && row < table.getRowCount()) {
-			                table.setRowSelectionInterval(row, row);
-			                
-			                // Debug: Print all column values for this row
-			                logger.debug("Row " + row + " column count: " + table.getColumnCount());
-			                logger.debug("Table total rows: " + table.getRowCount());
-			                
-			                for (int col = 0; col < table.getColumnCount(); col++) {
-			                    Object value = table.getValueAt(row, col);
-			                    String valueStr = (value != null) ? value.toString() : "null";
-			                    String typeStr = (value != null) ? value.getClass().getSimpleName() : "null";
-			                    logger.debug("Row " + row + ", Column " + col + ": '" + valueStr + "' (type: " + typeStr + ")");
-			                }
-			                
-			                selectedQueue = (String) table.getValueAt(row, 1); // Get queue name from column 1
-			                logger.info("Selected queue: '" + selectedQueue + "'");
-			                
-			                if (selectedQueue != null && !selectedQueue.trim().isEmpty()) {
-			                    logger.info("Attempting to browse queue: " + selectedQueue);
-			                    try {
-			                        onBrowse(selectedQueue, frame);
-			                    } catch (JCSMPException | SempException e1) {
-			                        logger.error("Error browsing queue: " + selectedQueue, e1);
-			                        e1.printStackTrace();
-			                    }
-			                } else {
-			                    logger.warn("No queue selected or queue name is empty. Row: " + row + ", selectedQueue: '" + selectedQueue + "'");
-			                    System.out.println("Warning: No queue selected or queue name is empty. Row: " + row + ", selectedQueue: '" + selectedQueue + "'");
-			                }
-			            } else {
-			                logger.error("Invalid row: " + row + " (table has " + table.getRowCount() + " rows)");
-			                System.out.println("Invalid row: " + row + " (table has " + table.getRowCount() + " rows)");
-			            }
+						try {
+							onBrowse(selectedQueue, frame);
+						} catch (JCSMPException | SempException e1 ) {
+							// TODO Auto-generated catch block
+							e1.printStackTrace();
+						} 
 			        }
 			    }
 
@@ -414,25 +381,28 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 	}
 
 	private void onSelectQueue(JTable table, int row) {
-		if (row >= 0 && row < table.getRowCount()) {
-			selectedQueue = (String) table.getValueAt(row, 1); // Get queue name directly from the row
-			browseButton.setEnabled(true);
-			copyAllButton.setEnabled(true);
-			deleteAllButton.setEnabled(true);
-			moveAllButton.setEnabled(true);
-			
-			try {
-				this.onQueueNameSelected(selectedQueue, detailsLabel, buttonPanel);
-			} catch (SempException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
+		selectedQueue = getSelectedQueue();
+		browseButton.setEnabled(true);
+		copyAllButton.setEnabled(true);
+		deleteAllButton.setEnabled(true);
+		moveAllButton.setEnabled(true);
+		
+		try {
+			this.onQueueNameSelected(selectedQueue, detailsLabel, buttonPanel);
+		} catch (SempException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
 		}
 	}
 
+	private String getSelectedQueue() {
+//		ListItem item = (ListItem) listBox.getSelectedValue();
+//		return item.text.trim();
+		return(String) table.getValueAt(table.getSelectedRow(), 1);
+	}
 	private void addButtons(JPanel buttonPanel) {
 		buttonPanel.add(refreshButton);
 		buttonPanel.add(copyAllButton);
@@ -442,15 +412,9 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 	}
 
 	private void onBrowse(String queueName, JFrame frame) throws SempException, JCSMPException {
-		logger.info("onBrowse called with queueName: '" + queueName + "'");
-		logger.debug("Creating BrowserDialog for queue: " + queueName);
-		
 		String[] otherQueues = getListOfQueuesExceptCurrentlySelectedOne(queueName);
-		logger.debug("Other queues count: " + otherQueues.length);
-		
 		BrowserDialog d = new BrowserDialog(this.sempV2ActionClient, this.broker, queueName, frame,
 				selectedQueueMsgCount, otherQueues, thisCfg.downloadFolder);
-		logger.info("BrowserDialog created successfully, calling run()");
 		d.run();
 	}
 
@@ -685,13 +649,6 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 //	}
 
 	public static void main(String[] args) throws BrokerException {
-		// Set log4j2 configuration file location - try classpath first, then external file
-		String log4jConfig = System.getProperty("log4j2.configurationFile");
-		if (log4jConfig == null) {
-			// Try to use the classpath resource
-			System.setProperty("log4j2.configurationFile", "log4j2.properties");
-		}
-		
 		CommandLineParser parser = new CommandLineParser();
 		parser.parseArgs(args);
 		logger.info("Configuration File: " + parser.configFileProvided);

@@ -52,9 +52,6 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.JTableHeader;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.solace.psg.brokers.Broker;
 import com.solace.psg.brokers.BrokerException;
 import com.solace.psg.brokers.semp.SempClient;
@@ -72,8 +69,6 @@ import com.solacesystems.jcsmp.SDTException;
 import com.solacesystems.jcsmp.SDTMap;
 
 public class BrowserDialog implements IDragDropInstigator {
-	private static final Logger logger = LoggerFactory.getLogger(BrowserDialog.class.getName());
-	
 	private Broker broker;
 	private PaginatedCachingBrowser browser;
 	private String queue;
@@ -149,20 +144,15 @@ public class BrowserDialog implements IDragDropInstigator {
 
 	@SuppressWarnings("serial")
 	void run() throws JCSMPException {
-		logger.info("BrowserDialog.run() started for queue: " + this.queue);
-		
 		int totalTableWidth = 1480; 
 		// Create the dialog
-		logger.debug("Creating JDialog for queue browser");
 		dialog = new JDialog(parentFrame, "Solace Queue Browser - " + this.queue, true);
 		dialog.setSize(1600, 1200);
 		dialog.setLayout(new BorderLayout());
 		dialog.setModal(false);
-		logger.debug("JDialog created successfully - size: 1600x1200, modal: false");
 
 		// Create the top panel
 		JPanel topPanel = new JPanel(new BorderLayout());
-		logger.debug("Created top panel");
 
 		ImageIcon icon = new ImageIcon("config/refresh48.png");
 		
@@ -510,27 +500,19 @@ public class BrowserDialog implements IDragDropInstigator {
 		// Center the dialog on the screen
 		dialog.setLocationRelativeTo(parentFrame);
 		dialog.setLocation(parentFrame.getLocation().x + 10, parentFrame.getLocation().y + 10);
-		logger.debug("Dialog positioned relative to parent frame");
 
 		// Make the dialog visible
 		// dialog.setVisible(true);
 
-		logger.info("Starting SwingUtilities.invokeLater for data loading");
 		SwingUtilities.invokeLater(() -> {
-			logger.debug("Inside SwingUtilities.invokeLater - starting data fetch");
 			// JOptionPane.showMessageDialog(dialog, "later");
 			dialog.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
-			logger.debug("Set cursor to WAIT_CURSOR");
 			preFetch();
-			logger.debug("preFetch() completed");
 			nCurPage = 0;
 			onNextPage(dialog, tableModel, nextPageButton);
-			logger.debug("onNextPage() completed");
 		});
 
-		logger.info("Making dialog visible");
 		dialog.setVisible(true);
-		logger.info("Dialog.setVisible(true) completed");
 	}
 	private String[] getPageSizes() {
 		String[] rc = new String[200];
@@ -1053,41 +1035,20 @@ public class BrowserDialog implements IDragDropInstigator {
 
 	boolean cantBrowseWarningIssuedAlready = false;
 	private void preFetch() {
-		logger.debug("preFetch() started - acquiring semaphore");
 		try {
 			semaphore.acquire();
-			logger.debug("Semaphore acquired, calling browser.prefetchNextPage()");
 			browser.prefetchNextPage();
-			logger.debug("browser.prefetchNextPage() completed successfully");
 		} catch (BrokerException | InterruptedException e) {
-			logger.error("Error in preFetch(): " + e.getMessage(), e);
 			if (e.getMessage().contains("Browsing Not Supported on Partitioned Queue")) {
 				if (! cantBrowseWarningIssuedAlready) {
-					logger.warn("Partitioned queue detected - showing warning dialog");
 					JOptionPane.showMessageDialog(this.dialog, "That queue is a partitioned queue. Browsing is not supported on Partitioned Queues");
 					cantBrowseWarningIssuedAlready = true;
 				}
-			} else if (e.getMessage().contains("Access denied")) {
-				logger.warn("Access denied to queue - showing permission error dialog");
-				JOptionPane.showMessageDialog(this.dialog, 
-					"Access Denied to Queue '" + this.queue + "'\n\n" +
-					"Your user account does not have 'browse' permission for this queue.\n" +
-					"Please contact your Solace administrator to request access.",
-					"Queue Access Denied", 
-					JOptionPane.ERROR_MESSAGE);
-			} else {
-				// Show generic error dialog for other types of errors
-				JOptionPane.showMessageDialog(this.dialog, 
-					"Error accessing queue '" + this.queue + "': " + e.getMessage(),
-					"Queue Browser Error", 
-					JOptionPane.ERROR_MESSAGE);
 			}
 			e.printStackTrace();
 		} finally {
-			logger.debug("Releasing semaphore");
 			semaphore.release();
 		}
-		logger.debug("preFetch() completed");
 	}
 
 	private void onPageChange() {
@@ -1139,25 +1100,18 @@ public class BrowserDialog implements IDragDropInstigator {
 	}
 	int rowCount = 0;
 	private void onNextPage(JDialog dialog, DefaultTableModel tableModel, JButton backButton) {
-		logger.debug("onNextPage() started - page: " + (nCurPage + 1));
 		dialog.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
 		nCurPage++;
 		Object[][] dataUpdate = null;
 		
 		try {
-			logger.debug("Getting messages for page: " + nCurPage);
 			dataUpdate = this.getMessages();
 			rowCount = dataUpdate.length;
-			logger.debug("Retrieved " + rowCount + " messages for page " + nCurPage);
 		} catch (BrokerException e) {
-			logger.error("Error getting messages for page " + nCurPage + ": " + e.getMessage(), e);
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		
-		logger.debug("Calling display() to update table with " + (dataUpdate != null ? dataUpdate.length : 0) + " rows");
 		display(tableModel, dataUpdate);
-		logger.debug("display() completed");
 		
 		backButton.setEnabled(true);
 		
