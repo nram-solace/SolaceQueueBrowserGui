@@ -14,7 +14,6 @@ public class Config {
 	
 	private String configFile;
 	public Broker broker;
-	public String downloadFolder = "./downloads";
 
 	/* removed for V1 release
 	public List<String> blackListedQueues = null;
@@ -37,9 +36,6 @@ public class Config {
 			throw new BrokerException(e);
 		}
 		JSONObject doc = new JSONObject(fileContent);
-		if (doc.has("downloadFolder")) {
-			downloadFolder = doc.getString("downloadFolder");
-		}
 
 		JSONObject eventBroker = doc.getJSONObject("eventBroker");
 		

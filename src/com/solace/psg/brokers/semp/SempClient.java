@@ -617,7 +617,6 @@ public class SempClient {
         public String permission;
         public String owner;
         public String rejectMsgToSenderOnDiscardBehavior;
-		public int partitionCount;
         
 	}	
 
@@ -642,7 +641,6 @@ public class SempClient {
 		rc.msgSpoolUsage = data.getInt("msgSpoolUsage");
 		rc.egressEnabled = data.getBoolean("egressEnabled");
 		rc.ingressEnabled = data.getBoolean("ingressEnabled");
-		rc.partitionCount = data.getInt("partitionCount");
 
 		rc.accessType = data.getString("accessType");
 		rc.deadMsgQueue = data.getString("deadMsgQueue");

@@ -1,0 +1,12 @@
+{
+	"eventBroker": {
+		"name": "nram cloud seh",
+		"sempHost": "https://mr-connection-o66jw2ti8s9.messaging.solace.cloud:943/SEMP/v2/config",
+		"sempAdminUser": "mission-control-manager",
+		"sempAdminPw": "dm0vohgltpmldlrbac23dbuefr",
+		"msgVpnName": "seh",
+		"messagingHost": "tcps://mr-connection-o66jw2ti8s9.messaging.solace.cloud:55443",
+		"messagingClientUsername": "default",
+		"messagingPw" : "default"
+	}
+}

@@ -1,4 +1,5 @@
-CFG=${1:-sample/sample-config.json}
+#CFG=sample/sample-config.json
+CFG=config/nv-dev.json
 OUT=out/run.out
 JAR=target/SolaceQueueBrowserGui-1.0.0-jar-with-dependencies.jar
 # check if JAR and CFG exist

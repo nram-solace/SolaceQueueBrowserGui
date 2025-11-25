@@ -3,10 +3,10 @@
 		"name": "nram-cloud",
 		"sempHost": "https://nram-gke-poc.messaging.solace.cloud:943/SEMP/v2/config",
 		"sempAdminUser": "nram-prod1-admin",
-		"sempAdminPw": "7pm31ob4h22pg3pabcocsh55u2",
+		"sempAdminPw": "*****",
 		"msgVpnName": "nram-prod1",
 		"messagingHost": "tcps://nram-gke-poc.messaging.solace.cloud:55443",
-		"messagingClientUsername": "test",
-		"messagingPw" : "test123"
+		"messagingClientUsername": "solace-cloud-client",
+		"messagingPw" : "*****"
 	}
 }

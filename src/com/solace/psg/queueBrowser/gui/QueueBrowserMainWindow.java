@@ -1,6 +1,7 @@
 package com.solace.psg.queueBrowser.gui;
 
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
@@ -16,24 +17,24 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
-import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
-import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableModel;
+
+import com.formdev.flatlaf.FlatLightLaf;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,6 +53,14 @@ import com.solacesystems.jcsmp.JCSMPException;
 
 public class QueueBrowserMainWindow implements IDragDropTarget {
 	private static final Logger logger = LoggerFactory.getLogger(QueueBrowserMainWindow.class.getName());
+
+	// Modern color scheme
+	private static final Color PRIMARY_COLOR = new Color(0x2196F3);
+	private static final Color ACCENT_COLOR = new Color(0xFF5722);
+	private static final Color SUCCESS_COLOR = new Color(0x4CAF50);
+	private static final Color WARNING_COLOR = new Color(0xFF9800);
+	private static final Color ERROR_COLOR = new Color(0xF44336);
+	private static final Color SURFACE_COLOR = new Color(0xFAFAFA);
 
 	private SempClient sempV2ConfigClient;
 	private SempClient sempV2MonitorClient;
@@ -99,7 +108,24 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 	
 	public QueueBrowserMainWindow(String configFile) throws BrokerException {
 		this.configFile = configFile;
+		this.setupLookAndFeel();
 		this.initialize();
+	}
+
+	private void setupLookAndFeel() {
+		try {
+			UIManager.setLookAndFeel(new FlatLightLaf());
+			// Customize FlatLaf properties
+			UIManager.put("Button.arc", 8);
+			UIManager.put("Component.arc", 8);
+			UIManager.put("ProgressBar.arc", 8);
+			UIManager.put("TextComponent.arc", 8);
+			UIManager.put("Button.background", PRIMARY_COLOR);
+			UIManager.put("Button.foreground", Color.WHITE);
+			UIManager.put("Button.focusedBackground", PRIMARY_COLOR.brighter());
+		} catch (Exception ex) {
+			logger.warn("Failed to initialize FlatLaf, using default look and feel", ex);
+		}
 	}
 
 	private void initialize() throws BrokerException {
@@ -131,6 +157,18 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 		}
 		return data;
 
+	}
+
+	private JButton createStyledButton(String text, Color backgroundColor) {
+		JButton button = new JButton(text);
+		button.setBackground(backgroundColor);
+		button.setForeground(Color.WHITE);
+		button.setFocusPainted(false);
+		button.setBorderPainted(false);
+		button.setFont(new Font("Segoe UI", Font.BOLD, 12));
+		button.setPreferredSize(new Dimension(button.getPreferredSize().width + 20, 36));
+		button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+		return button;
 	}
 
 	private void run() {
@@ -184,31 +222,6 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 
 			});
 	        table.setTransferHandler(new QueueMessageTransferReceiverHandler(this, "target-Q"));
-	        table.getActionMap().put("upArrow", new AbstractAction() {
-				public void actionPerformed(ActionEvent e) {
-					int row = table.getSelectedRow();
-					if (row > 0) {
-						row--;
-						table.setRowSelectionInterval(row, row);
-						onSelectQueue(table, row);
-					}
-				}
-			});
-
-			// DOWN arrow key binding
-			table.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(KeyStroke.getKeyStroke("DOWN"),"downArrow");
-			table.getActionMap().put("downArrow", new AbstractAction() {
-				public void actionPerformed(ActionEvent e) {
-					int row = table.getSelectedRow();
-					int rowCount = table.getRowCount();
-
-					if (row < (rowCount - 1)) {
-						row++;
-						table.setRowSelectionInterval(row, row);
-						onSelectQueue(table, row);
-					}
-				}
-			});
 			
 			JPanel listPanel = new JPanel(new BorderLayout());
 			listPanel.setPreferredSize(new Dimension(400, listPanel.getPreferredSize().height)); // Set the preferred width
@@ -230,6 +243,8 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 	        
 	        JPanel detailsPanel = new JPanel();
 	        detailsPanel.setLayout(new BoxLayout(detailsPanel, BoxLayout.Y_AXIS));
+	        detailsPanel.setBackground(Color.WHITE);
+	        detailsPanel.setBorder(new EmptyBorder(16, 16, 16, 16));
 			
 	        qIconlabel = new JLabel(new ImageIcon("config/queue.png"));
 	        qIconlabel.setVisible(false);
@@ -241,11 +256,13 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 	        detailsPanel.add(detailsLabel);
 	        
 			JScrollPane textScrollPane = new JScrollPane(detailsPanel);
-			textScrollPane.setBorder(new EmptyBorder(4, 4, 4, 4)); // Top, Left, Bottom, Right
+			textScrollPane.setBorder(new EmptyBorder(8, 8, 8, 8));
+			textScrollPane.getViewport().setBackground(Color.WHITE);
 
 			buttonPanel = new JPanel();
-			buttonPanel.setLayout(new FlowLayout(FlowLayout.RIGHT));
-			browseButton = new JButton("Browse");
+			buttonPanel.setLayout(new FlowLayout(FlowLayout.RIGHT, 12, 12));
+			buttonPanel.setBackground(SURFACE_COLOR);
+			browseButton = createStyledButton("Browse", PRIMARY_COLOR);
 			browseButton.setEnabled(false);
 			browseButton.addActionListener(new ActionListener() {
 				@Override
@@ -258,7 +275,7 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 				}
 			});
 
-			copyAllButton = new JButton("Copy all...");
+			copyAllButton = createStyledButton("Copy all...", SUCCESS_COLOR);
 			copyAllButton.setEnabled(false);
 			copyAllButton.addActionListener(new ActionListener() {
 				@Override
@@ -267,7 +284,7 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 				}
 			});
 
-			moveAllButton = new JButton("Move all...");
+			moveAllButton = createStyledButton("Move all...", WARNING_COLOR);
 			moveAllButton.setEnabled(false);
 			moveAllButton.addActionListener(new ActionListener() {
 				@Override
@@ -276,7 +293,7 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 				}
 			});
 
-			deleteAllButton = new JButton("Delete all");
+			deleteAllButton = createStyledButton("Delete all", ERROR_COLOR);
 			deleteAllButton.setEnabled(false);
 			deleteAllButton.addActionListener(new ActionListener() {
 				@Override
@@ -286,7 +303,7 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 
 			});
 
-			refreshButton = new JButton("Refresh");
+			refreshButton = createStyledButton("Refresh", new Color(0x607D8B));
 			refreshButton.setEnabled(true);
 			refreshButton.addActionListener(new ActionListener() {
 				@Override
@@ -319,12 +336,18 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 			wordsPanel.add(greetingLine2);
 
 			JPanel topPanel = new JPanel(new BorderLayout());
+			topPanel.setBackground(SURFACE_COLOR);
+			topPanel.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
 			topPanel.add(iconLabel,BorderLayout.WEST);
 			topPanel.add(wordsPanel,BorderLayout.CENTER);
 
 			JPanel rightPanel = new JPanel();
 			rightPanel.setLayout(new BorderLayout());
-			rightPanel.add(new JLabel("Queue details"), BorderLayout.NORTH);
+			rightPanel.setBackground(SURFACE_COLOR);
+			JLabel detailsHeaderLabel = new JLabel("Queue details");
+			detailsHeaderLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
+			detailsHeaderLabel.setBorder(new EmptyBorder(8, 8, 8, 8));
+			rightPanel.add(detailsHeaderLabel, BorderLayout.NORTH);
 			rightPanel.add(textScrollPane, BorderLayout.CENTER);
 
 			frame.add(topPanel, BorderLayout.NORTH);
@@ -414,7 +437,7 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 	private void onBrowse(String queueName, JFrame frame) throws SempException, JCSMPException {
 		String[] otherQueues = getListOfQueuesExceptCurrentlySelectedOne(queueName);
 		BrowserDialog d = new BrowserDialog(this.sempV2ActionClient, this.broker, queueName, frame,
-				selectedQueueMsgCount, otherQueues, thisCfg.downloadFolder);
+				selectedQueueMsgCount, otherQueues);
 		d.run();
 	}
 
@@ -525,13 +548,6 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
             	 }
              }
              
-             if (fieldName.equals("partitionCount")) {
-            	 int val = Integer.parseInt(value.toString());
-            	 if (val > 0) {
-            		 strValue += " - CANNOT browse"; 
-            	 }
-             }
-             
              String style = " ";
              if (big) {
             	 style = " style='font-size: 20px;' ";
@@ -564,10 +580,6 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 		addRowToDisplay(info, sb, "maxMsgSpoolUsage", false);
 		addRowToDisplay(info, sb, "owner", false);
 		addRowToDisplay(info, sb, "permission", false);
-		addRowToDisplay(info, sb, "egressEnabled", false);
-		addRowToDisplay(info, sb, "ingressEnabled", false);
-		addRowToDisplay(info, sb, "partitionCount", false);
-
         sb.append("</table>");
         sb.append("</div>");
         sb.append("</html>");
@@ -649,6 +661,13 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 //	}
 
 	public static void main(String[] args) throws BrokerException {
+		// Initialize FlatLaf before any GUI components
+		try {
+			UIManager.setLookAndFeel(new FlatLightLaf());
+		} catch (Exception ex) {
+			logger.warn("Failed to initialize FlatLaf, using default look and feel", ex);
+		}
+		
 		CommandLineParser parser = new CommandLineParser();
 		parser.parseArgs(args);
 		logger.info("Configuration File: " + parser.configFileProvided);

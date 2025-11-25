@@ -10,8 +10,6 @@ import java.awt.Font;
 import java.awt.Point;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.awt.event.KeyAdapter;
-import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseMotionAdapter;
@@ -20,20 +18,16 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Set;
 import java.util.concurrent.Semaphore;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
-import javax.swing.AbstractAction;
 import javax.swing.BoxLayout;
-import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
-import javax.swing.JComponent;
 import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -43,14 +37,10 @@ import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
-import javax.swing.JTextField;
-import javax.swing.KeyStroke;
-import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.TransferHandler;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableModel;
-import javax.swing.table.JTableHeader;
 
 import com.solace.psg.brokers.Broker;
 import com.solace.psg.brokers.BrokerException;
@@ -69,15 +59,23 @@ import com.solacesystems.jcsmp.SDTException;
 import com.solacesystems.jcsmp.SDTMap;
 
 public class BrowserDialog implements IDragDropInstigator {
+	// Modern color scheme (consistent with QueueBrowserMainWindow)
+	private static final Color PRIMARY_COLOR = new Color(0x2196F3);
+	private static final Color ACCENT_COLOR = new Color(0xFF5722);
+	private static final Color SUCCESS_COLOR = new Color(0x4CAF50);
+	private static final Color WARNING_COLOR = new Color(0xFF9800);
+	private static final Color ERROR_COLOR = new Color(0xF44336);
+	private static final Color SURFACE_COLOR = new Color(0xFAFAFA);
+
 	private Broker broker;
 	private PaginatedCachingBrowser browser;
 	private String queue;
 	private String[] otherQueues;
 	private JFrame parentFrame;
-	private int nCurPage = 1;
+	private int nCurPage = 0;
 
-	private int nItemsPerPage = 20;
-	private static final int nIdColumn = 2;
+	private static final int nItemsPerPage = 11;
+	private static final int nIdColumn = 1;
 	
 	private int estimatedPageCount = 0;
 
@@ -91,7 +89,7 @@ public class BrowserDialog implements IDragDropInstigator {
 	private DefaultTableModel headersTableModel; 
 	private JTable propsTable;
 	private DefaultTableModel propsTableModel; 
-	private JButton nextPageButton;
+	private JButton nextButton;
 	private JButton nextMsgButton;
 	private JButton delButton;
 	private JButton prevMsgButton;
@@ -106,23 +104,18 @@ public class BrowserDialog implements IDragDropInstigator {
 	private IconicTableCellRenderer iconCellRenderer;
 	private ImageIcon messageIcon;
 	private SempClient sempV2ActionClient;
-	private JComboBox<String> cboMsgsPerPage;
 
 	public Point mousePressPoint;
-	private FilterSpecification spec = new FilterSpecification();
-	private String lastIdAdded = "";
+    FilterSpecification spec = new FilterSpecification();
+	String lastIdAdded = "";
 	int numberOfMessagesOnTheCurrentPage = -1;
-	private String downloadFolder = "";
-	
-	private String headerFields[] = {"Destination","Delivery Mode", "Reply-To Destination", "Time-To-Live (TTL)",
+
+	String headerFields[] = {"Destination","Delivery Mode", "Reply-To Destination", "Time-To-Live (TTL)",
 			"DMQ Eligible", "Immediate Acknowledgement", "Redelivery Flag",
 			"Deliver-To-One", "Class of Service (CoS)", "Eliding Eligible",
 			"Message ID", "Correlation ID", "Message Type", "Encoding"}; //, "Compression"
 
-	private enum eSelectAllState {eIndeterminant, eSelectedAll, eSelectedNone};
-	private eSelectAllState currentSelectAllState = eSelectAllState.eIndeterminant; 
-	
-	public BrowserDialog(SempClient sempV2ActionClient, Broker b, String queue, JFrame frame, int nEstimatedMessageCount, String[] otherQueues, String downloadFolder) throws SempException {
+	public BrowserDialog(SempClient sempV2ActionClient, Broker b, String queue, JFrame frame, int nEstimatedMessageCount, String[] otherQueues) throws SempException {
 		this.queue = queue;
 		this.otherQueues = otherQueues;
 		this.parentFrame = frame;
@@ -131,7 +124,7 @@ public class BrowserDialog implements IDragDropInstigator {
 		this.iconCellRenderer = new IconicTableCellRenderer();
 		this.messageIcon = new ImageIcon("config/messageIcon32.png");
 		this.sempV2ActionClient = sempV2ActionClient;
-		this.downloadFolder = downloadFolder;
+		
 		//spec.bodyValue = "the text you seek";
 		
 		this.initialize();
@@ -142,6 +135,18 @@ public class BrowserDialog implements IDragDropInstigator {
 		this.browser.setFilter(spec);
 	}
 
+	private JButton createStyledButton(String text, Color backgroundColor) {
+		JButton button = new JButton(text);
+		button.setBackground(backgroundColor);
+		button.setForeground(Color.WHITE);
+		button.setFocusPainted(false);
+		button.setBorderPainted(false);
+		button.setFont(new Font("Segoe UI", Font.BOLD, 12));
+		button.setPreferredSize(new Dimension(button.getPreferredSize().width + 16, 32));
+		button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+		return button;
+	}
+
 	@SuppressWarnings("serial")
 	void run() throws JCSMPException {
 		int totalTableWidth = 1480; 
@@ -150,109 +155,38 @@ public class BrowserDialog implements IDragDropInstigator {
 		dialog.setSize(1600, 1200);
 		dialog.setLayout(new BorderLayout());
 		dialog.setModal(false);
+		dialog.getContentPane().setBackground(SURFACE_COLOR);
 
 		// Create the top panel
 		JPanel topPanel = new JPanel(new BorderLayout());
-
-		ImageIcon icon = new ImageIcon("config/refresh48.png");
-		
-        //JLabel iconLabel = new JLabel(icon);
-        JButton refreshButton = new JButton("Refresh", icon);
-        refreshButton.setHorizontalTextPosition(SwingConstants.RIGHT); // Text to the right of icon
-        refreshButton.setVerticalTextPosition(SwingConstants.CENTER);
-        refreshButton.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                onRefresh();
-            }
-        });
-        
+		topPanel.setBackground(SURFACE_COLOR);
+		topPanel.setBorder(new EmptyBorder(12, 12, 12, 12));
 
 		JPanel topTextMessages = new JPanel(new BorderLayout());
-		topTextMessages.setBorder(new EmptyBorder(10, 20, 10, 20));
+		topTextMessages.setBackground(SURFACE_COLOR);
 		topLabel = new JLabel("Message in the " + this.queue + " queue. Showing page " + nCurPage + " of about "
 				+ estimatedPageCount);
-		
-		String filterDescription = "Showing all messages.";
-		if (spec.isEmpty() == false) {
-			filterDescription = "<html><br>Filter: '" + spec.bodyValue + "'; showing only messages where this text is contained in the payload<br><br></html>";
-		}	
-		filterLabel = new JLabel(filterDescription );
+		topLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
+		topLabel.setForeground(PRIMARY_COLOR);
+		filterLabel = new JLabel("<html><br>Filter: '" + spec.bodyValue + "'; showing only messages where this text is contained in the payload<br><br></html>");
+		filterLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+
+
 		topTextMessages.add(topLabel, BorderLayout.NORTH);
 //		topTextMessages.add(filterButton, BorderLayout.CENTER);
 		topTextMessages.add(filterLabel, BorderLayout.SOUTH);
 		
-		JPanel headerLabel = new JPanel(new BorderLayout());
-		headerLabel.add(refreshButton, BorderLayout.WEST);
 		
-		headerLabel.add(topTextMessages, BorderLayout.CENTER);
-		
-		cboMsgsPerPage = new JComboBox<>(getPageSizes());
-		cboMsgsPerPage.setSelectedItem ("" + nItemsPerPage);
-		cboMsgsPerPage.setEditable(true);
-		cboMsgsPerPage.getEditor().getEditorComponent().addKeyListener(new KeyAdapter() {
-		    public void keyReleased(KeyEvent e) {
-		        String input = ((JTextField) comboBox.getEditor().getEditorComponent()).getText();
-		        for (int i = 0; i < comboBox.getItemCount(); i++) {
-		            if (comboBox.getItemAt(i).toString().startsWith(input)) {
-		                comboBox.setSelectedIndex(i);
-		                break;
-		            }
-		        }
-		    }
-		});
-		cboMsgsPerPage.addActionListener(e -> {
-		    Object selected = cboMsgsPerPage.getSelectedItem();
-		    int selectedValue = Integer.parseInt(selected.toString()); 
-		    if (selectedValue != nItemsPerPage) {
-		    	nItemsPerPage = selectedValue; 
-			    //System.out.println("Selected: " + nItemsPerPage);
-		    	onRefresh();
-		    }
-		});
-
-		JButton previousPageButton = new JButton("<< Previous Page");
-		previousPageButton.setEnabled(false);
-		previousPageButton.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				onPreviousPage(dialog, tableModel, previousPageButton);
-			}
-		});
-
-		nextPageButton = new JButton("Next Page >>");
-		nextPageButton.setEnabled(false);
-		nextPageButton.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				onNextPage(dialog, tableModel, previousPageButton);
-			}
-		});
-		JPanel paginationLabel = new JPanel(new BorderLayout());
-		paginationLabel.add(cboMsgsPerPage, BorderLayout.WEST);
-		paginationLabel.add(previousPageButton, BorderLayout.CENTER);
-		paginationLabel.add(nextPageButton, BorderLayout.EAST);
-		paginationLabel.setBorder(new EmptyBorder(10, 20, 10, 20));
-
-		headerLabel.add(paginationLabel, BorderLayout.EAST);
-
-		
-		topPanel.add(headerLabel, BorderLayout.NORTH);
+		topPanel.add(topTextMessages, BorderLayout.NORTH);
 		
 		String[][] data = new String[][] {};
-		String[] columnNames = { "Select", "", "Message Id", "Size", "Redelivered?" };
+		String[] columnNames = { "", "Message Id", "Size", "Redelivered?" };
 
 		// Create the table model
 		tableModel = new DefaultTableModel(data, columnNames) {
 			@Override
-			public Class<?> getColumnClass(int columnIndex) {
-				if (columnIndex == 0) return Boolean.class;
-                if (columnIndex == 1) return Icon.class;
-                return String.class;
-			}
-
-			@Override
 			public boolean isCellEditable(int row, int column) {
-				return column == 0; // Only checkbox column is editable
+				return false; // Disable editing for all cells
 			}
 		};
 
@@ -263,83 +197,57 @@ public class BrowserDialog implements IDragDropInstigator {
 
 		// Set a custom cell renderer to alternate row colors
 		table.setDefaultRenderer(Object.class, new AlternatingRowColorRenderer());
-		table.getColumnModel().getColumn(1).setCellRenderer(iconCellRenderer);
+		table.getColumnModel().getColumn(0).setCellRenderer(iconCellRenderer);
 		
 		table.getColumnModel().getColumn(0).setPreferredWidth(36);
-		table.getColumnModel().getColumn(1).setPreferredWidth(36);
-		int remainindWidth = totalTableWidth - 72;
+		int remainindWidth = totalTableWidth - 36;
+        table.getColumnModel().getColumn(1).setPreferredWidth(remainindWidth/3);
         table.getColumnModel().getColumn(2).setPreferredWidth(remainindWidth/3);
         table.getColumnModel().getColumn(3).setPreferredWidth(remainindWidth/3);
-        table.getColumnModel().getColumn(4).setPreferredWidth(remainindWidth/3);
         
-		// Enable gridlines
-		table.setShowGrid(true);
-		table.setGridColor(Color.BLACK);
-		table.addMouseListener(new TableMouseListener(table, this));
-		table.addMouseMotionListener(new TableMouseMotionListener(table));
-		table.setTransferHandler(new QueueMessageTransferInstigatorHandler(this, "source"));
-
-		table.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(KeyStroke.getKeyStroke("UP"), "upArrow");
-		table.getActionMap().put("upArrow", new AbstractAction() {
-			public void actionPerformed(ActionEvent e) {
-				int row = table.getSelectedRow();
-				if (row > 0) {
-					selectedRow = row - 1;
-					table.setRowSelectionInterval(selectedRow, selectedRow);
-					table.scrollRectToVisible(table.getCellRect(table.getSelectedRow(), 0, true));
-					onSelectMessage(table, selectedRow);
-				}
-			}
-		});
-
-		// DOWN arrow key binding
-		table.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(KeyStroke.getKeyStroke("DOWN"),"downArrow");
-		table.getActionMap().put("downArrow", new AbstractAction() {
-			public void actionPerformed(ActionEvent e) {
-				int row = table.getSelectedRow();
-				if (row < (numberOfMessagesOnTheCurrentPage - 1)) {
-					selectedRow = row + 1;
-					table.setRowSelectionInterval(selectedRow, selectedRow);
-					table.scrollRectToVisible(table.getCellRect(table.getSelectedRow(), 0, true));
-					onSelectMessage(table, selectedRow);
-				}
-			}
-		});
-		
-		JTableHeader header = table.getTableHeader();
-		header.addMouseListener(new MouseAdapter() {
-		    @Override
-		    public void mouseClicked(MouseEvent e) {
-		        int col = header.columnAtPoint(e.getPoint());
-		        if (col == 0) { 
-		        	boolean newValue = true; 
-		        	if (currentSelectAllState == eSelectAllState.eSelectedAll) {
-		        		newValue = false;
-		        		currentSelectAllState = eSelectAllState.eSelectedNone;
-		        		setStatus("De-selected all messages");
-		        	}
-		        	else {
-		        		currentSelectAllState = eSelectAllState.eSelectedAll;
-		        		setStatus(table.getRowCount() + " messages selected");
-		        	}
-		            for (int row = 0; row < table.getRowCount(); row++) {
-		                table.setValueAt(newValue, row, col);
-		            }
-		            table.clearSelection();
-		            if (newValue) {
-		            	table.setRowSelectionInterval(0, table.getRowCount() - 1);
-		            	JOptionPane.showMessageDialog(dialog, "Multi-message selection is in beta. Some features may not work as expected!", "Notice", JOptionPane.INFORMATION_MESSAGE);
-		            }
-		            table.repaint();
-		        }
-		    }
-		});
+		// Modern table styling
+		table.setRowHeight(36);
+		table.setShowGrid(false);
+		table.setIntercellSpacing(new Dimension(0, 0));
+		table.setSelectionBackground(PRIMARY_COLOR.brighter());
+		table.setSelectionForeground(Color.WHITE);
+		table.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+		table.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 12));
+		table.getTableHeader().setBackground(SURFACE_COLOR);
+//		table.addMouseListener(new MouseAdapter() {
+//			@Override
+//			public void mouseClicked(MouseEvent e) {
+//				int row = table.rowAtPoint(e.getPoint());
+//				onSelectMessage(table, row);
+//			}
+//		});
+        table.addMouseListener(new TableMouseListener(table, this));
+        table.addMouseMotionListener(new TableMouseMotionListener(table));
+        table.setTransferHandler(new QueueMessageTransferInstigatorHandler(this, "source"));
 
 		JScrollPane listScrollPane = new JScrollPane(table);
 		listScrollPane.setPreferredSize(new Dimension(380, 400));
 		topPanel.add(listScrollPane, BorderLayout.CENTER);
 
-		delButton = new JButton("Delete");
+		JButton backButton = createStyledButton("<< Previous Page", new Color(0x607D8B));
+		backButton.setEnabled(false);
+		backButton.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				onPreviousPage(dialog, tableModel, backButton);
+			}
+		});
+
+		nextButton = createStyledButton("Next Page >>", new Color(0x607D8B));
+		nextButton.setEnabled(false);
+		nextButton.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				onNextPage(dialog, tableModel, backButton);
+			}
+		});
+
+		delButton = createStyledButton("Delete", ERROR_COLOR);
 		delButton.setEnabled(false);
 		delButton.addActionListener(new ActionListener() {
 			@Override
@@ -348,7 +256,7 @@ public class BrowserDialog implements IDragDropInstigator {
 			}
 		});
 
-		nextMsgButton = new JButton("Next Message >");
+		nextMsgButton = createStyledButton("Next Message >", PRIMARY_COLOR);
 		nextMsgButton.setEnabled(false);
 		nextMsgButton.addActionListener(new ActionListener() {
 			@Override
@@ -356,15 +264,15 @@ public class BrowserDialog implements IDragDropInstigator {
 				onNextMessage();
 			}
 		});
-		prevMsgButton = new JButton("< Previous Message");
+		prevMsgButton = createStyledButton("< Previous Message", PRIMARY_COLOR);
 		prevMsgButton.setEnabled(false);
 		prevMsgButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				onPreviousMessage();
+				onPreviousMessage(table);
 			}
 		});
-		copyMessageMsgButton = new JButton("Copy to Queue:");
+		copyMessageMsgButton = createStyledButton("Copy to Queue:", SUCCESS_COLOR);
 		copyMessageMsgButton.setEnabled(false);
 		copyMessageMsgButton.addActionListener(new ActionListener() {
 			@Override
@@ -373,7 +281,7 @@ public class BrowserDialog implements IDragDropInstigator {
 			}
 		});
 
-		moveMessageMsgButton = new JButton("Move to Queue:");
+		moveMessageMsgButton = createStyledButton("Move to Queue:", WARNING_COLOR);
 		moveMessageMsgButton.setEnabled(false);
 		moveMessageMsgButton.addActionListener(new ActionListener() {
 			@Override
@@ -386,7 +294,7 @@ public class BrowserDialog implements IDragDropInstigator {
         preferredSize.width = 400;
         comboBox.setPreferredSize(preferredSize);
 
-        downloadMessageMsgButton = new JButton("Download");
+        downloadMessageMsgButton = createStyledButton("Download", ACCENT_COLOR);
         downloadMessageMsgButton.setEnabled(false);
         downloadMessageMsgButton.addActionListener(new ActionListener() {
 			@Override
@@ -395,7 +303,7 @@ public class BrowserDialog implements IDragDropInstigator {
 			}
 		});
 
-		JButton filterButton = new JButton("Filter messages...");
+		JButton filterButton = createStyledButton("Filter messages...", new Color(0x9C27B0));
 		filterButton.setEnabled(true);
 		filterButton.addActionListener(new ActionListener() {
 			@Override
@@ -417,14 +325,14 @@ public class BrowserDialog implements IDragDropInstigator {
 		buttonMiddlePanel.add(downloadMessageMsgButton);
 		
 		
-//		JPanel buttonRightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-//		buttonRightPanel.add(previousPageButton);
-//		buttonRightPanel.add(nextPageButton);
+		JPanel buttonRightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+		buttonRightPanel.add(backButton);
+		buttonRightPanel.add(nextButton);
 
 		JPanel buttonPanel = new JPanel(new BorderLayout());
 		buttonPanel.add(buttonLeftPanel, BorderLayout.WEST);
 		buttonPanel.add(buttonMiddlePanel, BorderLayout.CENTER);
-		//buttonPanel.add(buttonRightPanel, BorderLayout.EAST);
+		buttonPanel.add(buttonRightPanel, BorderLayout.EAST);
 
 		// buttonPanel.add(new JButton("Button 2"));
 		topPanel.add(buttonPanel, BorderLayout.SOUTH);
@@ -508,33 +416,13 @@ public class BrowserDialog implements IDragDropInstigator {
 			// JOptionPane.showMessageDialog(dialog, "later");
 			dialog.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
 			preFetch();
-			nCurPage = 0;
-			onNextPage(dialog, tableModel, nextPageButton);
+			nCurPage = -1;
+			onNextPage(dialog, tableModel, nextButton);
 		});
 
 		dialog.setVisible(true);
 	}
-	private String[] getPageSizes() {
-		String[] rc = new String[200];
-		for (int i = 0; i < 200; i++) {
-			Integer index = i + 1;
-			rc[i] = index.toString(); 
-		}
-		return rc;
-	}
 	
-	private void onRefresh() {
-		dialog.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
-		try {
-			initialize();
-		} catch (SempException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		SwingUtilities.invokeLater(() -> {
-			restartAfterFilter("Refreshing");
-		});
-	}
 	private void onClickFilter(JDialog dialog, DefaultTableModel tableModel, JButton filterButton) {
 		
 		FilterDialog filterD = new FilterDialog(dialog, this.spec);
@@ -551,25 +439,19 @@ public class BrowserDialog implements IDragDropInstigator {
 	//		dialog.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
 	 
 			SwingUtilities.invokeLater(() -> {
-				restartAfterFilter("Applying Filter");
+				restartAfterFilter();
 			});
 		}
 		
 	}
-	private void restartAfterFilter(String title) {
+	private void restartAfterFilter() {
 		
-		SpinnerDialog spinner = new SpinnerDialog(dialog, title);
+		SpinnerDialog spinner = new SpinnerDialog(dialog);
 		
-		String filterDescription = "Showing all messages";
-		if (spec.isEmpty() == false) {
-			filterDescription = "<html><br>Showing messages that match the specified filter.<br><br></html>";
-		}	
-		filterLabel.setText(filterDescription); 
-
 		tableModel.setRowCount(0);
 		preFetch();
-		nCurPage = 0;
-		onNextPage(dialog, tableModel, nextPageButton);
+		nCurPage = -1;
+		onNextPage(dialog, tableModel, nextButton);
 		
 		spinner.setVisible(false);
 	}
@@ -585,27 +467,10 @@ public class BrowserDialog implements IDragDropInstigator {
 	private void onCopyMessage() {
 		moveOrCopy(false);
 	}
-	
 	private void moveOrCopy(boolean deleteFromSource) {
-		ArrayList<String> ids = getAllSelectedMessageIds();
-		if (ids.size() > 1) {
-			for (String id : ids) {
-				moveOrCopyMessage(id, deleteFromSource, false);
-			}
-			String action = "copied";
-			if (deleteFromSource == true) {
-				action = "moved";
-			}
-			String selectedTargetQueue = (String) comboBox.getSelectedItem();
-			setStatus(ids.size() + " messages were " + action+ " to " + selectedTargetQueue);
-		}
-		else {
-			String id = ids.get(0);
-			moveOrCopyMessage(id, deleteFromSource, true);
-		}
-	}
-	private void moveOrCopyMessage(String id, boolean deleteFromSource, boolean showStatus) {
 		String selectedTargetQueue = (String) comboBox.getSelectedItem();
+		String id = getMessageIdOfSelectedARow();
+		System.out.println("moving message " + id + " to " + selectedTargetQueue);
 		
 		BytesXMLMessage msg = browser.get(id);
 		ReplicationGroupMessageId replicationId = msg.getReplicationGroupMessageId();
@@ -619,10 +484,6 @@ public class BrowserDialog implements IDragDropInstigator {
 			String logMsg = "MessageId " + id + " (replication id='" + replicationId.toString() + "') was " + action + 
 					" from the '" + this.queue + "' queue to the '" + selectedTargetQueue + "'.";
 			CommandLog.instance().log(logMsg);
-			
-			if (showStatus) {
-				setStatus (logMsg);
-			}
 			
 		} catch (SempException e1) {
 			e1.printStackTrace();
@@ -671,30 +532,15 @@ public class BrowserDialog implements IDragDropInstigator {
             }
         }
 	}
-
 	private void onDownloadMessage() {
-		ArrayList<String> ids = getAllSelectedMessageIds();
-		if (ids.size() > 1) {
-			for (String id : ids) {
-				downloadMessage(id, false);
-			}
-			setStatus(ids.size() + " messages were downloaded to " + this.downloadFolder);
-		}
-		else {
-			String id = ids.get(0);
-			downloadMessage(id, true);
-		}
-	}
-	
-	private void downloadMessage(String id, boolean showStatus) {
 		try {
-			//String id = getMessageIdOfSelectedRow();
+			String id = getMessageIdOfSelectedARow();
 			BytesXMLMessage message = this.browser.get(id);
 			String payload = browser.getPayload(message);
 			String[][] headers = getMessageHeadersData(message);
 			String[][] userProps = getMessageUserPropsData(message);
 			
-			String folder = this.downloadFolder;
+			String folder = "./downloads";
 			makeDirIfRequired(folder);
 			
 			String payloadFile = folder + "/payload.txt"; 
@@ -709,11 +555,8 @@ public class BrowserDialog implements IDragDropInstigator {
 			writeStringToFile(userPropsFile, payload);
 
 			//StringBuilder sb = new StringBuilder();
-			String context = this.broker.name + "-" + this.broker.msgVpnName;
-			Instant when = Instant.now();
-			long lWhen = when.toEpochMilli();
 			
-			String zipFileName = folder + "/" + context + "-" + "msg-" + id + "-" + lWhen + ".zip";
+			String zipFileName = folder + "/message-" + id + ".zip";
 
 	        FileOutputStream fos = new FileOutputStream(zipFileName);
             ZipOutputStream zipOut = new ZipOutputStream(fos);
@@ -727,9 +570,6 @@ public class BrowserDialog implements IDragDropInstigator {
             deleteFile(headersFile);
             deleteFile(userPropsFile);
             
-            if (showStatus) {
-            	setStatus("Downloaded message " + id + " to " + zipFileName) ;
-            }
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -747,144 +587,49 @@ public class BrowserDialog implements IDragDropInstigator {
         }
         fis.close();
 	}
-	
-	private ArrayList<String> getAllSelectedMessageIds() {
-		ArrayList<Integer> allSelectedRowNumbers = getAllSelectedRows();
-		ArrayList<String> ids = new ArrayList<String>();
-    	for (Integer i : allSelectedRowNumbers) {
-    		String id = (String) table.getValueAt(i, nIdColumn);
-    		ids.add(id);
-    	}
-    	return ids;
-	}
-	
 	private void onDeleteMessage(JTable table, Component dialog) {
-		ArrayList<Integer> allSelectedRowNumbers = getAllSelectedRows();
-		String prompt = "";
-		if (allSelectedRowNumbers.size() == 1) {
-			String id = getMessageIdOfSelectedRow();
-			prompt = "Are you sure you want to delete message (" + id + ")?"; 
-		}
-		else {
-			prompt = "Are you sure you want to delete all " + allSelectedRowNumbers.size() + " rows?"; 
-		}
+		String id = getMessageIdOfSelectedARow();
 		
-		int response = JOptionPane.showConfirmDialog(dialog, prompt, "Confirmation", JOptionPane.YES_NO_OPTION);
+		int response = JOptionPane.showConfirmDialog(dialog, 
+                "Are you sure you want to delete message (" + id + ")?", 
+                "Confirmation", 
+                JOptionPane.YES_NO_OPTION);
+
         if (response == JOptionPane.YES_OPTION) {
-    		ArrayList<String> ids = new ArrayList<String>();
-        	for (Integer i : allSelectedRowNumbers) {
-        		String id = (String) table.getValueAt(i, nIdColumn);
-        		ids.add(id);
-            	this.browser.delete(id);
-            	String logMsg = "MessageId " + id + " was deleted from the '" + this.queue + "' queue.";
-    			CommandLog.instance().log(logMsg);
-        	}
+        	doDelete(id);
         	
-        	// now update the GUI
-        	boolean finished = false;
-        	while (! finished) {
-        		boolean deletedAnyThisRun = false;
-	    		for (int rowIter = 0; rowIter < table.getRowCount() ; rowIter++) {
-	        		String id = (String) table.getValueAt(rowIter, nIdColumn);
-	        		
-	        		// was this message deleted?
-	        		for (String oneDeletedId : ids) {
-	        			if (id.equals(oneDeletedId)) {
-	        				tableModel.removeRow(rowIter);
-	                		numberOfMessagesOnTheCurrentPage--;
-	                		
-	                		// now the model is different, rows are offset, just restart and keep doing 
-	                		// that until none get deleted
-	                		deletedAnyThisRun = true;
-	                		break;
-	        			}
-	        		}
-	        		if (deletedAnyThisRun) {
-	        			if (table.getRowCount() == 0) {
-	        				finished = true;
-	        			}
-	        			break;
-	        		}
-	        		else {
-	        			finished = true;
-	        		}
-	    		}
-        	}
-        	
-//        	for (Integer i : all) {
-//            	//doDelete(id);
-//
-//        		// now axe the row that was deleted
-//        		if (selectedRow != -1) {
-//        			tableModel.removeRow(i);
-//        		}
-//
-//        	}
-//    		if (all.size() == 1) {
-//    			setStatus (logMsg);
-//    		} 
-//    		else {
-//            	String logMsg = "";
-//    			setStatus (all.size() + " messages were deleted.");
-//    		}
+			String logMsg = "MessageId " + id + " was deleted from the '" + this.queue + "' queue.";
+			CommandLog.instance().log(logMsg);
+
         } 
 	}
 	private void doDelete(String id) {
 		this.browser.delete(id);
 		int selectedRow = table.getSelectedRow();
 		
-		numberOfMessagesOnTheCurrentPage--;
-
+		// skp ahead first so that the onSelect event handling properly sahows the next message
+		onNextMessage();
+		
 		// now axe the row that was deleted
 		if (selectedRow != -1) {
 			tableModel.removeRow(selectedRow);
 		}
-
-		if (numberOfMessagesOnTheCurrentPage == 0) {
-			// this is the only message, thing else to select
-			clearMessageSelection();
-		}
-		else if (selectedRow == this.numberOfMessagesOnTheCurrentPage) {
-			// this is the last row, move back one
-			onPreviousMessage();
-		}
-		else {
-			// skip ahead first so that the onSelect event handling properly shows the next message
-			onNextMessage();
-		}
-		
 		
 	}
 
 	private void onNextMessage() {
 		int nRow = this.selectedRow + 1;
-		
-		int max = table.getRowCount();
-		if ((nRow < 0) || (nRow > (max -1))) {
-			nRow = nRow;
-		}
-		
 		table.setRowSelectionInterval(nRow, nRow);
 		onSelectMessage(table, nRow);
 	}
-	private void onPreviousMessage() {
+	private void onPreviousMessage(JTable table) {
 		int nRow = this.selectedRow - 1;
 		table.setRowSelectionInterval(nRow, nRow);
 		onSelectMessage(table, nRow);
 	}
 
-	private String getMessageIdOfSelectedRow() {
+	private String getMessageIdOfSelectedARow() {
 		return(String) table.getValueAt(this.selectedRow, nIdColumn);
-	}
-	private ArrayList<Integer> getAllSelectedRows() {
-		ArrayList<Integer> selectedIndices = new ArrayList<>();
-		for (int row = 0; row < table.getRowCount(); row++) {
-		    Boolean checked = (Boolean) table.getValueAt(row, 0);
-		    if (checked != null && checked) {
-		        selectedIndices.add(row);
-		    }
-		}
-		return selectedIndices;
 	}
 	
 	private String getHeaderValue(BytesXMLMessage message, String field) {
@@ -949,50 +694,25 @@ public class BrowserDialog implements IDragDropInstigator {
 	
 	private String[][] getMessageUserPropsData(BytesXMLMessage message) throws SDTException {
 		SDTMap map = message.getProperties();
-		String[][] data = null;
-		if (map != null) {
-			data = new String[map.size()][];
-	
-			Set<String> keys = map.keySet();
-			int i = 0;
-			for (String key : keys) {
-		        Object value = map.get(key);
-				data[i] = new String[2];
-				data[i][0] = key;
-				data[i][1] = value.toString();
-				i++;
-			}
-		}
-		else {
-			data = new String[0][];
+		
+		String[][] data = new String[map.size()][];
+
+		Set<String> keys = map.keySet();
+		int i = 0;
+		for (String key : keys) {
+	        Object value = map.get(key);
+			data[i] = new String[2];
+			data[i][0] = key;
+			data[i][1] = value.toString();
+			i++;
 		}
 		return data;
 	}
 	
-	private void clearMessageSelection() {
-		DefaultTableModel headersTableModel = (DefaultTableModel) headersTable.getModel();
-		headersTableModel.setRowCount(0); // Clears all existing rows
-		DefaultTableModel propsTableModel = (DefaultTableModel) propsTable.getModel();
-		propsTableModel.setRowCount(0); // Clears all existing rows
-
-		nextMsgButton.setEnabled(false);
-		delButton.setEnabled(false);
-		prevMsgButton.setEnabled(false);
-		
-		moveMessageMsgButton.setEnabled(false);
-		copyMessageMsgButton.setEnabled(false);
-		downloadMessageMsgButton.setEnabled(false);
-		textArea.setText("");
-
-		setStatus("Noting selected - selectedRow=" + selectedRow + ",total=" + this.numberOfMessagesOnTheCurrentPage ) ;
-		
-		this.selectedRow = -1;
-
-	}
 	private void onSelectMessage(JTable table, int row) {
 		try {
 			this.selectedRow = row;
-			String id = getMessageIdOfSelectedRow();
+			String id = getMessageIdOfSelectedARow();
 			String payload = browser.getPayload(id);
 			textArea.setText(payload);
 			textArea.setCaretPosition(0);
@@ -1027,24 +747,18 @@ public class BrowserDialog implements IDragDropInstigator {
 			copyMessageMsgButton.setEnabled(true);
 			downloadMessageMsgButton.setEnabled(true);
 			
-			setStatus("Viewing message " + id + "; selectedRow=" + selectedRow + ",total=" + this.numberOfMessagesOnTheCurrentPage ) ;
+			setStatus("Viewing message " + id);
 		} catch (Throwable t) {
 			System.out.println(t.getLocalizedMessage());
 		}
 	}
 
-	boolean cantBrowseWarningIssuedAlready = false;
 	private void preFetch() {
 		try {
 			semaphore.acquire();
 			browser.prefetchNextPage();
 		} catch (BrokerException | InterruptedException e) {
-			if (e.getMessage().contains("Browsing Not Supported on Partitioned Queue")) {
-				if (! cantBrowseWarningIssuedAlready) {
-					JOptionPane.showMessageDialog(this.dialog, "That queue is a partitioned queue. Browsing is not supported on Partitioned Queues");
-					cantBrowseWarningIssuedAlready = true;
-				}
-			}
+			// TODO Auto-generated catch block
 			e.printStackTrace();
 		} finally {
 			semaphore.release();
@@ -1052,7 +766,7 @@ public class BrowserDialog implements IDragDropInstigator {
 	}
 
 	private void onPageChange() {
-		topLabel.setText("Message in the " + this.queue + " queue. Showing page " + nCurPage + " of up to about " 
+		topLabel.setText("Message in the " + this.queue + " queue. Showing page " + nCurPage + " of up to about "
 				+ estimatedPageCount);
 		textArea.setText("");
 	}
@@ -1083,10 +797,10 @@ public class BrowserDialog implements IDragDropInstigator {
 		} 
 		display(tableModel, dataUpdate);
 
-		if (nCurPage < 2) {
+		if (nCurPage < 1) {
 			backButton.setEnabled(false);
 		}
-		nextPageButton.setEnabled(shouldNextPageButtonBeActive());
+		nextButton.setEnabled(shouldNextPageButtonBeActive());
 
 		onPageChange();
 		dialog.setCursor(Cursor.getDefaultCursor());
@@ -1116,7 +830,7 @@ public class BrowserDialog implements IDragDropInstigator {
 		backButton.setEnabled(true);
 		
 		// see if the browser has any more messages after the last one onscreen
-		nextPageButton.setEnabled(shouldNextPageButtonBeActive());
+		nextButton.setEnabled(shouldNextPageButtonBeActive());
 		onPageChange();
 		dialog.setCursor(Cursor.getDefaultCursor());
 
@@ -1132,7 +846,7 @@ public class BrowserDialog implements IDragDropInstigator {
 	private Object[][] getMessages() throws BrokerException {
 		// Create an ArrayList of ArrayList<String> to store the data
 		ArrayList<ArrayList<String>> dynamicArray = new ArrayList<>();
-		ArrayList<BytesXMLMessage> thisPage = browser.getPage(nCurPage - 1); // its star6 counting at 0
+		ArrayList<BytesXMLMessage> thisPage = browser.getPage(nCurPage);
 
 		for (BytesXMLMessage message : thisPage) {
 			ArrayList<String> row = new ArrayList<>();
@@ -1140,11 +854,10 @@ public class BrowserDialog implements IDragDropInstigator {
 			String id = message.getMessageId();
 			row.add(id);
 
-			String payload = this.browser.getPayload(message);
-			int size = payload.length();
-//			if (size == 0) {
-//				size = message.getBinaryMetadataContentLength(size);
-//			}
+			int size = message.getAttachmentContentLength();
+			if (size == 0) {
+				size = message.getBinaryMetadataContentLength(size);
+			}
 			row.add("" + size);
 
 			String yN = "No";
@@ -1168,11 +881,10 @@ public class BrowserDialog implements IDragDropInstigator {
 		Object[][] data = new Object[dynamicArray.size()][];
 		for (int i = 0; i < dynamicArray.size(); i++) {
 			ArrayList<String> row = dynamicArray.get(i);
-			data[i] = new Object[row.size() + 2];
-			data[i][0] = false;
-			data[i][1] = messageIcon;
+			data[i] = new Object[row.size() + 1];
+			data[i][0] = messageIcon;
 			for (int y = 0; y < row.size(); y++) {
-				data[i][y+2] = row.get(y);	
+				data[i][y+1] = row.get(y);	
 			}
 		}
 		return data;

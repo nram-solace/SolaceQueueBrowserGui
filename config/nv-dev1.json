@@ -1,0 +1,12 @@
+{
+	"eventBroker": {
+		"name": "nvidia-aem-dev",
+		"sempHost": "https://eventhubdev.nvidia.com:943/SEMP/v2/config",
+		"sempAdminUser": "ranatarajan@nvidia.com",
+		"sempAdminPw": "SDRitjfbemHkQ98#",
+		"msgVpnName": "nvidia-eis-eventbroker-azu",
+		"messagingHost": "tcps://eventhubdev.nvidia.com:55443",
+		"messagingClientUsername": "solace-dev",
+		"messagingPw" : "Solace12#"
+	}
+}
