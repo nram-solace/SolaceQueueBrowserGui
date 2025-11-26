@@ -32,11 +32,14 @@ import javax.swing.JTable;
 import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableModel;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.formdev.flatlaf.FlatLightLaf;
 
 import com.solace.psg.brokers.Broker;
 import com.solace.psg.brokers.BrokerException;
@@ -99,7 +102,16 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 	
 	public QueueBrowserMainWindow(String configFile) throws BrokerException {
 		this.configFile = configFile;
+		this.setupLookAndFeel();
 		this.initialize();
+	}
+
+	private void setupLookAndFeel() {
+		try {
+			UIManager.setLookAndFeel(new FlatLightLaf());
+		} catch (Exception ex) {
+			logger.warn("Failed to initialize FlatLaf, using default look and feel", ex);
+		}
 	}
 
 	private void initialize() throws BrokerException {
@@ -685,13 +697,20 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 //	}
 
 	public static void main(String[] args) throws BrokerException {
+		// Initialize FlatLaf before any GUI components
+		try {
+			UIManager.setLookAndFeel(new FlatLightLaf());
+		} catch (Exception ex) {
+			logger.warn("Failed to initialize FlatLaf, using default look and feel", ex);
+		}
+
 		// Set log4j2 configuration file location - try classpath first, then external file
 		String log4jConfig = System.getProperty("log4j2.configurationFile");
 		if (log4jConfig == null) {
 			// Try to use the classpath resource
 			System.setProperty("log4j2.configurationFile", "log4j2.properties");
 		}
-		
+
 		CommandLineParser parser = new CommandLineParser();
 		parser.parseArgs(args);
 		logger.info("Configuration File: " + parser.configFileProvided);
