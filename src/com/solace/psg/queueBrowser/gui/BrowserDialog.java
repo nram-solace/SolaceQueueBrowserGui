@@ -773,6 +773,17 @@ public class BrowserDialog implements IDragDropInstigator {
     		String id = (String) table.getValueAt(i, nIdColumn);
     		ids.add(id);
     	}
+
+    	// Fallback: if no checkboxes are checked but a row is selected,
+    	// use the row selection (supports single-message operations)
+    	if (ids.isEmpty()) {
+    		int selectedRow = table.getSelectedRow();
+    		if (selectedRow >= 0 && selectedRow < table.getRowCount()) {
+    			String id = (String) table.getValueAt(selectedRow, nIdColumn);
+    			ids.add(id);
+    		}
+    	}
+
     	return ids;
 	}
 	
