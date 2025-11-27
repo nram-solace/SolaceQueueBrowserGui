@@ -68,3 +68,4 @@ nram/**
 .claude/**
 out/**
 tmp/**
+.specs/**
