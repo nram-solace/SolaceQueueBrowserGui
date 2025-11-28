@@ -426,18 +426,98 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 				brokerComboBox.addActionListener(new ActionListener() {
 					@Override
 					public void actionPerformed(ActionEvent e) {
+						System.out.println(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
+						System.out.println("BROKER COMBO BOX ACTION EVENT TRIGGERED");
+						System.out.println(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
+						logger.info(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
+						logger.info("BROKER COMBO BOX ACTION EVENT TRIGGERED");
+						logger.info(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
+						
 						@SuppressWarnings("unchecked")
 						JComboBox<String> cb = (JComboBox<String>) e.getSource();
 						String selectedBrokerName = (String) cb.getSelectedItem();
+						System.out.println("Selected broker name from combo box: " + selectedBrokerName);
+						logger.info("Selected broker name from combo box: " + selectedBrokerName);
+						
+						// Save the previous broker index BEFORE attempting switch
+						// This ensures we can restore it if the switch fails
+						int previousIndex = thisCfg.getSelectedBrokerIndex();
+						Broker previousBroker = broker; // Save current broker reference
+						logger.info("Previous broker index: " + previousIndex);
+						logger.info("Previous broker name: " + (previousBroker != null ? previousBroker.name : "null"));
+						
 						try {
+							logger.info("Calling switchBroker('" + selectedBrokerName + "')...");
 							switchBroker(selectedBrokerName);
+							logger.info("switchBroker() returned successfully");
+							// If successful, the label should already be updated in switchBroker()
+							logger.info("Broker switch completed successfully in action listener");
 						} catch (BrokerException ex) {
+							logger.error(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
+							logger.error("BROKER EXCEPTION CAUGHT IN ACTION LISTENER");
+							logger.error(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
+							logger.error("Exception message: " + ex.getMessage());
+							if (ex.getCause() != null) {
+								logger.error("Exception cause: " + ex.getCause().getMessage());
+							}
+							logger.error("Broker switch failed: " + ex.getMessage(), ex);
 							JOptionPane.showMessageDialog(frame, 
 								"Failed to switch broker: " + ex.getMessage(),
 								"Broker Switch Failed",
 								JOptionPane.ERROR_MESSAGE);
-							// Reset combo box to previous selection
-							cb.setSelectedIndex(thisCfg.getSelectedBrokerIndex());
+							
+							// Restore previous broker state
+							logger.info("Attempting to restore previous broker state...");
+							logger.info("  - previousIndex: " + previousIndex);
+							logger.info("  - previousBroker: " + (previousBroker != null ? previousBroker.name : "null"));
+							logger.info("  - greetingLine0: " + (greetingLine0 != null ? "not null" : "null"));
+							logger.info("  - broker: " + (broker != null ? broker.name : "null"));
+							
+							try {
+								// Restore config to previous broker
+								logger.info("Restoring config to previous broker index: " + previousIndex);
+								thisCfg.setSelectedBrokerIndex(previousIndex);
+								broker = previousBroker; // Restore broker reference
+								logger.info("Broker restored. broker.name: " + (broker != null ? broker.name : "null"));
+								
+								// Reset combo box to previous selection
+								logger.info("Resetting combo box to index: " + previousIndex);
+								cb.setSelectedIndex(previousIndex);
+								
+								// Update label to show restored broker info
+								if (greetingLine0 != null && broker != null) {
+									logger.info("Updating label with restored broker info...");
+									String brokerFqdn = broker.fqdn();
+									if (brokerFqdn == null || brokerFqdn.isEmpty()) {
+										brokerFqdn = broker.sempHost;
+									}
+									String brokerInfo = "Broker: " + brokerFqdn + " | Service: " + broker.msgVpnName + " | SEMP User: " + broker.sempAdminUser + " | Client User: " + broker.messagingClientUsername;
+									logger.info("Restored broker info text: " + brokerInfo);
+									// Use HTML to enable text wrapping with two-line format
+									String htmlBrokerInfo = formatBrokerInfoWithWrapping(
+										brokerFqdn,
+										broker.msgVpnName != null ? broker.msgVpnName : "",
+										broker.sempAdminUser != null ? broker.sempAdminUser : "",
+										broker.messagingClientUsername != null ? broker.messagingClientUsername : ""
+									);
+									greetingLine0.setText(htmlBrokerInfo);
+									greetingLine0.setVisible(true);
+									greetingLine0.setToolTipText(brokerInfo);
+									logger.info("Label updated. Text: " + greetingLine0.getText() + ", Visible: " + greetingLine0.isVisible());
+									SwingUtilities.invokeLater(() -> {
+										greetingLine0.revalidate();
+										greetingLine0.repaint();
+										logger.info("Label revalidated and repainted");
+									});
+									logger.info("Successfully restored broker info display after switch failure");
+								} else {
+									logger.error("Cannot restore broker info - greetingLine0=" + greetingLine0 + ", broker=" + broker);
+								}
+							} catch (Exception restoreEx) {
+								logger.error("Failed to restore broker info after switch failure: " + restoreEx.getMessage(), restoreEx);
+								restoreEx.printStackTrace();
+							}
+							logger.info("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
 						}
 					}
 				});
@@ -445,10 +525,97 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 			}
 			
 			// Create single line connection info: Broker: host | Service: VPN | SEMP User: user | Client User: user
-			greetingLine0 = new JLabel("Broker: " + broker.fqdn() + " | Service: " + broker.msgVpnName + " | SEMP User: " + broker.sempAdminUser + " | Client User: " + broker.messagingClientUsername);
-			greetingLine0.setFont(new Font(headerFontFamily, Font.PLAIN, 16));
+			// Ensure broker is not null and has valid data
+			System.out.println("========================================");
+			System.out.println("CREATING INITIAL BROKER INFO LABEL");
+			System.out.println("========================================");
+			System.out.println("broker is null: " + (broker == null));
+			System.out.println("thisCfg.brokers.size(): " + thisCfg.brokers.size());
+			System.out.println("thisCfg.getSelectedBrokerIndex(): " + thisCfg.getSelectedBrokerIndex());
+			
+			if (broker == null) {
+				System.out.println("ERROR: Broker is null during UI initialization!");
+				logger.error("Broker is null during UI initialization!");
+				if (thisCfg.brokers.size() > 0) {
+					broker = thisCfg.brokers.get(0); // Fallback to first broker
+					System.out.println("Using fallback broker: " + broker.name);
+				} else {
+					System.out.println("ERROR: No brokers available!");
+					logger.error("No brokers available!");
+					broker = new Broker(); // Create empty broker to prevent NPE
+				}
+			}
+			
+			// Create label with broker info - use helper method logic
+			try {
+				System.out.println("Broker details:");
+				System.out.println("  - broker.name: " + broker.name);
+				System.out.println("  - broker.sempHost: " + broker.sempHost);
+				System.out.println("  - broker.msgVpnName: " + broker.msgVpnName);
+				System.out.println("  - broker.sempAdminUser: " + broker.sempAdminUser);
+				System.out.println("  - broker.messagingClientUsername: " + broker.messagingClientUsername);
+				
+				logger.info("Creating initial broker info label - broker.name=" + broker.name + 
+					", sempHost=" + broker.sempHost + 
+					", msgVpnName=" + broker.msgVpnName + 
+					", sempAdminUser=" + broker.sempAdminUser + 
+					", messagingClientUsername=" + broker.messagingClientUsername);
+				
+				String brokerFqdn = broker.fqdn();
+				System.out.println("  - broker.fqdn(): " + brokerFqdn);
+				if (brokerFqdn == null || brokerFqdn.isEmpty()) {
+					System.out.println("WARNING: Broker FQDN is empty, using sempHost: " + broker.sempHost);
+					logger.warn("Broker FQDN is empty, using sempHost: " + broker.sempHost);
+					brokerFqdn = broker.sempHost != null ? broker.sempHost : "";
+				}
+				
+				// Format broker info as two lines
+				String brokerInfo = "Broker: " + brokerFqdn + 
+					" | Service: " + (broker.msgVpnName != null ? broker.msgVpnName : "") + 
+					" | SEMP User: " + (broker.sempAdminUser != null ? broker.sempAdminUser : "") + 
+					" | Client User: " + (broker.messagingClientUsername != null ? broker.messagingClientUsername : "");
+				
+				System.out.println("Broker info text: " + brokerInfo);
+				System.out.println("Creating JLabel with two-line format");
+				
+				// Use HTML to enable text wrapping with two-line format
+				String htmlBrokerInfo = formatBrokerInfoWithWrapping(
+					brokerFqdn,
+					broker.msgVpnName != null ? broker.msgVpnName : "",
+					broker.sempAdminUser != null ? broker.sempAdminUser : "",
+					broker.messagingClientUsername != null ? broker.messagingClientUsername : ""
+				);
+				greetingLine0 = new JLabel(htmlBrokerInfo);
+				greetingLine0.setFont(new Font(headerFontFamily, Font.PLAIN, 16));
+				greetingLine0.setVisible(true);
+				// Set tooltip to show full text on hover
+				greetingLine0.setToolTipText(brokerInfo);
+				
+				System.out.println("Label created. Text: " + greetingLine0.getText());
+				System.out.println("Label visible: " + greetingLine0.isVisible());
+				System.out.println("Label parent: " + greetingLine0.getParent());
+				
+				logger.info("Initial broker info display created: " + brokerInfo);
+			} catch (Exception e) {
+				System.out.println("EXCEPTION creating initial broker info label: " + e.getMessage());
+				e.printStackTrace();
+				logger.error("Failed to create initial broker info label: " + e.getMessage(), e);
+				// Create label with fallback info
+				String fallbackInfo = "Broker: " + (broker.name != null ? broker.name : "Unknown");
+				// Use HTML to enable text wrapping
+				String htmlFallbackInfo = formatBrokerInfoWithWrapping(fallbackInfo);
+				greetingLine0 = new JLabel(htmlFallbackInfo);
+				greetingLine0.setFont(new Font(headerFontFamily, Font.PLAIN, 16));
+				greetingLine0.setVisible(true);
+				System.out.println("Created fallback label: " + fallbackInfo);
+			}
+			
+			System.out.println("Adding label to topPanel...");
 			topPanel.add(new JLabel("  ")); // Add some space before connection info
 			topPanel.add(greetingLine0);
+			System.out.println("Label added to topPanel. Label parent: " + greetingLine0.getParent());
+			System.out.println("topPanel component count: " + topPanel.getComponentCount());
+			System.out.println("========================================");
 			
 			// greetingLine1 is no longer needed, but keep it for switchBroker() method compatibility
 			greetingLine1 = new JLabel(""); // Empty label for compatibility
@@ -464,19 +631,230 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 
 			frame.setVisible(true);
 	}
-	private void switchBroker(String brokerName) throws BrokerException {
-		frame.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+	/**
+	 * Helper method to format broker info text with HTML wrapping
+	 * Formats broker info into two lines:
+	 * Line 1: Broker and Service
+	 * Line 2: Management User and Message User
+	 * @param brokerFqdn The broker FQDN/hostname
+	 * @param msgVpnName The message VPN name
+	 * @param sempAdminUser The SEMP admin user
+	 * @param messagingClientUsername The messaging client username
+	 * @return HTML formatted string with two-line layout
+	 */
+	private String formatBrokerInfoWithWrapping(String brokerFqdn, String msgVpnName, String sempAdminUser, String messagingClientUsername) {
+		// Escape HTML special characters to prevent rendering issues
+		String escapedFqdn = (brokerFqdn != null ? brokerFqdn : "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+		String escapedVpn = (msgVpnName != null ? msgVpnName : "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+		String escapedSempUser = (sempAdminUser != null ? sempAdminUser : "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+		String escapedMsgUser = (messagingClientUsername != null ? messagingClientUsername : "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+		
+		// Format as two lines
+		String line1 = "Broker: " + escapedFqdn + " | Service: " + escapedVpn;
+		String line2 = "Mgmt. User: " + escapedSempUser + " | Msg. User: " + escapedMsgUser;
+		
+		// Use HTML to enable text wrapping with a maximum width
+		// The max-width will cause the text to wrap to multiple lines if needed
+		return "<html><div style='max-width: 600px; word-wrap: break-word; white-space: normal;'>" + 
+			line1 + "<br>" + line2 + 
+			"</div></html>";
+	}
+	
+	/**
+	 * Legacy method for backward compatibility - formats single-line broker info
+	 * @param brokerInfo The broker info text to format
+	 * @return HTML formatted string with wrapping enabled
+	 */
+	private String formatBrokerInfoWithWrapping(String brokerInfo) {
+		// Escape HTML special characters to prevent rendering issues
+		String escaped = brokerInfo.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+		// Use a reasonable max-width that will wrap on most screens (600px should work well)
+		// The word-wrap ensures long words break if needed
+		return "<html><div style='max-width: 600px; word-wrap: break-word; white-space: normal;'>" + 
+			escaped + 
+			"</div></html>";
+	}
+	
+	/**
+	 * Helper method to update the broker info label
+	 * Must be called on EDT thread
+	 */
+	private void updateBrokerInfoLabel() {
+		System.out.println("updateBrokerInfoLabel() called");
+		System.out.println("  - greetingLine0 is null: " + (greetingLine0 == null));
+		System.out.println("  - broker is null: " + (broker == null));
+		
+		if (greetingLine0 == null) {
+			System.out.println("ERROR: greetingLine0 is null in updateBrokerInfoLabel!");
+			logger.error("greetingLine0 is null in updateBrokerInfoLabel!");
+			return;
+		}
+		if (broker == null) {
+			System.out.println("ERROR: broker is null in updateBrokerInfoLabel!");
+			logger.error("broker is null in updateBrokerInfoLabel!");
+			return;
+		}
 		
 		try {
-			// Update config to use the selected broker
+			System.out.println("Broker details in updateBrokerInfoLabel:");
+			System.out.println("  - broker.name: " + broker.name);
+			System.out.println("  - broker.sempHost: " + broker.sempHost);
+			System.out.println("  - broker.msgVpnName: " + broker.msgVpnName);
+			System.out.println("  - broker.sempAdminUser: " + broker.sempAdminUser);
+			System.out.println("  - broker.messagingClientUsername: " + broker.messagingClientUsername);
+			
+			logger.info("Updating broker info label - broker.name=" + broker.name + 
+				", sempHost=" + broker.sempHost + 
+				", msgVpnName=" + broker.msgVpnName + 
+				", sempAdminUser=" + broker.sempAdminUser + 
+				", messagingClientUsername=" + broker.messagingClientUsername);
+			
+			String brokerFqdn = broker.fqdn();
+			System.out.println("  - broker.fqdn(): " + brokerFqdn);
+			if (brokerFqdn == null || brokerFqdn.isEmpty()) {
+				System.out.println("WARNING: Broker FQDN is empty, using sempHost: " + broker.sempHost);
+				logger.warn("Broker FQDN is empty, using sempHost: " + broker.sempHost);
+				brokerFqdn = broker.sempHost;
+			}
+			
+			// Format broker info as two lines
+			String brokerInfo = "Broker: " + brokerFqdn + 
+				" | Service: " + (broker.msgVpnName != null ? broker.msgVpnName : "") + 
+				" | SEMP User: " + (broker.sempAdminUser != null ? broker.sempAdminUser : "") + 
+				" | Client User: " + (broker.messagingClientUsername != null ? broker.messagingClientUsername : "");
+			
+			System.out.println("Setting label text to two-line format");
+			System.out.println("Label text before update: " + greetingLine0.getText());
+			System.out.println("Label visible before update: " + greetingLine0.isVisible());
+			System.out.println("Label parent before update: " + greetingLine0.getParent());
+			
+			// Use HTML to enable text wrapping with two-line format
+			String htmlBrokerInfo = formatBrokerInfoWithWrapping(
+				brokerFqdn,
+				broker.msgVpnName != null ? broker.msgVpnName : "",
+				broker.sempAdminUser != null ? broker.sempAdminUser : "",
+				broker.messagingClientUsername != null ? broker.messagingClientUsername : ""
+			);
+			greetingLine0.setText(htmlBrokerInfo);
+			greetingLine0.setVisible(true);
+			// Set tooltip to show full text on hover
+			greetingLine0.setToolTipText(brokerInfo);
+			greetingLine0.revalidate();
+			greetingLine0.repaint();
+			
+			System.out.println("Label text after update: " + greetingLine0.getText());
+			System.out.println("Label visible after update: " + greetingLine0.isVisible());
+			System.out.println("Label parent after update: " + greetingLine0.getParent());
+			
+			logger.info("Successfully updated broker info label: " + brokerInfo);
+		} catch (Exception e) {
+			System.out.println("EXCEPTION in updateBrokerInfoLabel: " + e.getMessage());
+			e.printStackTrace();
+			logger.error("Exception in updateBrokerInfoLabel: " + e.getMessage(), e);
+			// Still try to show something
+			try {
+				String fallbackInfo = "Broker: " + (broker.name != null ? broker.name : "Unknown") + 
+					" | Service: " + (broker.msgVpnName != null ? broker.msgVpnName : "");
+				// Use HTML to enable text wrapping
+				String htmlFallbackInfo = formatBrokerInfoWithWrapping(fallbackInfo);
+				greetingLine0.setText(htmlFallbackInfo);
+				greetingLine0.setVisible(true);
+				System.out.println("Set fallback broker info: " + fallbackInfo);
+				logger.info("Set fallback broker info: " + fallbackInfo);
+			} catch (Exception e2) {
+				System.out.println("EXCEPTION setting fallback: " + e2.getMessage());
+				e2.printStackTrace();
+				logger.error("Failed to set fallback broker info: " + e2.getMessage(), e2);
+			}
+		}
+	}
+	
+	private void switchBroker(String brokerName) throws BrokerException {
+		System.out.println("========================================");
+		System.out.println("SWITCHING BROKER: " + brokerName);
+		System.out.println("========================================");
+		System.out.println("Current broker before switch: " + (broker != null ? broker.name : "null"));
+		System.out.println("Current selectedBrokerIndex before switch: " + thisCfg.getSelectedBrokerIndex());
+		logger.info("========================================");
+		logger.info("SWITCHING BROKER: " + brokerName);
+		logger.info("========================================");
+		logger.info("Current broker before switch: " + (broker != null ? broker.name : "null"));
+		logger.info("Current selectedBrokerIndex before switch: " + thisCfg.getSelectedBrokerIndex());
+		
+		frame.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+		
+		// Update config to use the selected broker first
+		try {
+			System.out.println("Calling setSelectedBrokerByName('" + brokerName + "')...");
+			logger.info("Calling setSelectedBrokerByName('" + brokerName + "')...");
 			thisCfg.setSelectedBrokerByName(brokerName);
 			broker = thisCfg.broker;
-			
+			System.out.println("Broker object set successfully. New broker details:");
+			System.out.println("  - broker.name: " + (broker != null ? broker.name : "null"));
+			System.out.println("  - broker.sempHost: " + (broker != null ? broker.sempHost : "null"));
+			System.out.println("  - broker.msgVpnName: " + (broker != null ? broker.msgVpnName : "null"));
+			System.out.println("  - broker.sempAdminUser: " + (broker != null ? broker.sempAdminUser : "null"));
+			System.out.println("  - broker.messagingClientUsername: " + (broker != null ? broker.messagingClientUsername : "null"));
+			System.out.println("  - broker.messagingHost: " + (broker != null ? broker.messagingHost : "null"));
+			System.out.println("  - broker.fqdn(): " + (broker != null ? broker.fqdn() : "null"));
+			System.out.println("New selectedBrokerIndex: " + thisCfg.getSelectedBrokerIndex());
+			logger.info("Broker object set successfully. New broker details:");
+			logger.info("  - broker.name: " + (broker != null ? broker.name : "null"));
+			logger.info("  - broker.sempHost: " + (broker != null ? broker.sempHost : "null"));
+			logger.info("  - broker.msgVpnName: " + (broker != null ? broker.msgVpnName : "null"));
+			logger.info("  - broker.sempAdminUser: " + (broker != null ? broker.sempAdminUser : "null"));
+			logger.info("  - broker.messagingClientUsername: " + (broker != null ? broker.messagingClientUsername : "null"));
+			logger.info("  - broker.messagingHost: " + (broker != null ? broker.messagingHost : "null"));
+			logger.info("  - broker.fqdn(): " + (broker != null ? broker.fqdn() : "null"));
+			logger.info("New selectedBrokerIndex: " + thisCfg.getSelectedBrokerIndex());
+		} catch (BrokerException e) {
+			logger.error("Failed to set selected broker by name: " + e.getMessage(), e);
+			frame.setCursor(Cursor.getDefaultCursor());
+			throw e;
+		}
+		
+		// Update UI labels immediately (before connection attempt)
+		// This ensures broker info is displayed even if connection fails
+		// Execute on EDT to ensure UI updates happen synchronously
+		logger.info("Updating broker info label...");
+		logger.info("  - greetingLine0 is null: " + (greetingLine0 == null));
+		logger.info("  - broker is null: " + (broker == null));
+		logger.info("  - Current thread is EDT: " + SwingUtilities.isEventDispatchThread());
+		
+		if (greetingLine0 == null) {
+			logger.error("greetingLine0 is null! Cannot update broker info display.");
+		} else if (broker == null) {
+			logger.error("broker is null! Cannot update broker info display.");
+		} else {
+			// Update label synchronously on EDT
+			if (SwingUtilities.isEventDispatchThread()) {
+				logger.info("Updating label on EDT thread directly...");
+				updateBrokerInfoLabel();
+			} else {
+				logger.info("Not on EDT thread, using invokeAndWait...");
+				try {
+					SwingUtilities.invokeAndWait(() -> {
+						logger.info("Inside invokeAndWait callback, updating label...");
+						updateBrokerInfoLabel();
+					});
+					logger.info("invokeAndWait completed successfully");
+				} catch (Exception e) {
+					logger.error("Failed to update broker info on EDT: " + e.getMessage(), e);
+					// Fallback: try async update
+					logger.info("Falling back to invokeLater...");
+					SwingUtilities.invokeLater(() -> {
+						logger.info("Inside invokeLater callback, updating label...");
+						updateBrokerInfoLabel();
+					});
+				}
+			}
+		}
+		
+		try {
 			// Reinitialize connections for the new broker
+			logger.info("Starting broker connection initialization...");
 			initializeBrokerConnections();
-			
-			// Update UI labels
-			greetingLine0.setText("Broker: " + broker.fqdn() + " | Service: " + broker.msgVpnName + " | SEMP User: " + broker.sempAdminUser + " | Client User: " + broker.messagingClientUsername);
+			logger.info("Broker connection initialization completed successfully");
 			
 			// Refresh queue list
 			DefaultTableModel model = (DefaultTableModel) table.getModel();
@@ -504,20 +882,67 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 					+ "</html>");
 			qIconlabel.setVisible(false);
 			
-			logger.info("Switched to broker: " + brokerName);
+			logger.info("========================================");
+			logger.info("BROKER SWITCH COMPLETED SUCCESSFULLY: " + brokerName);
+			logger.info("========================================");
 			
 		} catch (BrokerException e) {
+			logger.error("========================================");
+			logger.error("BROKER SWITCH FAILED (BrokerException): " + brokerName);
+			logger.error("Error: " + e.getMessage());
+			if (e.getCause() != null) {
+				logger.error("Cause: " + e.getCause().getMessage());
+			}
+			logger.error("Current broker after failure: " + (broker != null ? broker.name : "null"));
+			logger.error("greetingLine0 is null: " + (greetingLine0 == null));
+			if (greetingLine0 != null) {
+				logger.error("greetingLine0 text: " + greetingLine0.getText());
+				logger.error("greetingLine0 visible: " + greetingLine0.isVisible());
+			}
+			logger.error("========================================");
 			frame.setCursor(Cursor.getDefaultCursor());
+			// Label should already be updated, but ensure it's visible
+			if (greetingLine0 != null) {
+				greetingLine0.setVisible(true);
+			}
 			throw e;
 		} catch (Exception e) {
+			logger.error("========================================");
+			logger.error("BROKER SWITCH FAILED (Exception): " + brokerName);
+			logger.error("Error: " + e.getMessage());
+			logger.error("Exception type: " + e.getClass().getName());
+			if (e.getCause() != null) {
+				logger.error("Cause: " + e.getCause().getMessage());
+				logger.error("Cause type: " + e.getCause().getClass().getName());
+			}
+			logger.error("Current broker after failure: " + (broker != null ? broker.name : "null"));
+			logger.error("greetingLine0 is null: " + (greetingLine0 == null));
+			if (greetingLine0 != null) {
+				logger.error("greetingLine0 text: " + greetingLine0.getText());
+				logger.error("greetingLine0 visible: " + greetingLine0.isVisible());
+			}
+			logger.error("========================================");
 			frame.setCursor(Cursor.getDefaultCursor());
+			// Label should already be updated, but ensure it's visible
+			if (greetingLine0 != null) {
+				greetingLine0.setVisible(true);
+			}
 			String errorMsg = "Failed to switch broker: " + e.getMessage();
 			if (e.getCause() != null) {
 				errorMsg += " - Cause: " + e.getCause().getMessage();
 			}
 			throw new BrokerException(errorMsg);
 		} finally {
+			logger.info("switchBroker() finally block - ensuring label is visible");
 			frame.setCursor(Cursor.getDefaultCursor());
+			// Ensure label is visible in finally block
+			if (greetingLine0 != null) {
+				greetingLine0.setVisible(true);
+				logger.info("greetingLine0 text in finally: " + greetingLine0.getText());
+				logger.info("greetingLine0 visible in finally: " + greetingLine0.isVisible());
+			} else {
+				logger.error("greetingLine0 is null in finally block!");
+			}
 		}
 	}
 	
