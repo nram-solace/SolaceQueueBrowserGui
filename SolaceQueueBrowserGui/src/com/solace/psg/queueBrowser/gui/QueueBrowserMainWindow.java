@@ -300,13 +300,16 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 			listPanel.add(scrollingList, BorderLayout.CENTER);
 
 			detailsLabel = new JLabel();// TextArea();
-			// Use Serif font like the queue details panel for consistency
-			String detailsFontFamily = (thisCfg.fontFamily != null && !thisCfg.fontFamily.isEmpty()) ? thisCfg.fontFamily : "Serif";
-			detailsLabel.setFont(new Font(detailsFontFamily, Font.ITALIC, 16));
+			// Use system default font for better cross-platform appearance (especially on Windows)
+			// Falls back to SansSerif if config font is not set, which looks more natural than Serif
+			String detailsFontFamily = (thisCfg.fontFamily != null && !thisCfg.fontFamily.isEmpty()) ? thisCfg.fontFamily : Font.SANS_SERIF;
+			detailsLabel.setFont(new Font(detailsFontFamily, Font.PLAIN, 14)); // Changed from ITALIC to PLAIN, reduced size slightly
 			
+			// Use same font family as the label for consistency
+			String placeholderFontFamily = (thisCfg.fontFamily != null && !thisCfg.fontFamily.isEmpty()) ? thisCfg.fontFamily : Font.SANS_SERIF;
 			detailsLabel.setText("<html>"
-	                + "<div style='width: 280px; text-align: left; vertical-align:top'>"
-	                + "<p><i>Select a queue on the left to see details.</i></p>"
+	                + "<div style='width: 280px; text-align: left; vertical-align:top; font-family: " + placeholderFontFamily + ";'>"
+	                + "<p>Select a queue on the left to see details.</p>"
 	                + "</div>"
 	                + "</html>");
 			detailsLabel.setVerticalAlignment(SwingConstants.TOP);
@@ -706,10 +709,12 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 
 		//String display = "Queue name: " + queueName + "\nCurrent Message Count: " + selectedQueueMsgCount;
 		StringBuilder sb = new StringBuilder();
+		// Use system default font family for better cross-platform appearance
+		String htmlFontFamily = (thisCfg.fontFamily != null && !thisCfg.fontFamily.isEmpty()) ? thisCfg.fontFamily : Font.SANS_SERIF;
 		sb.append("<html>");
-		sb.append("<div style='width: 580px; text-align: left; vertical-align:top'>");
+		sb.append("<div style='width: 580px; text-align: left; vertical-align:top; font-family: " + htmlFontFamily + ";'>");
 
-		sb.append("<div style='width: 580px; text-align: left; vertical-align:top'>");
+		sb.append("<div style='width: 580px; text-align: left; vertical-align:top; font-family: " + htmlFontFamily + ";'>");
 		sb.append("<table>");
 		addRowToDisplay(info, sb, "name", true);
 		addRowToDisplay(info, sb, "msgCount", false);
