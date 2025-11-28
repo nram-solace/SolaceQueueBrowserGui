@@ -18,12 +18,14 @@ public class AlternatingRowColorRenderer extends DefaultTableCellRenderer {
 		Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
 		if (!isSelected) {
 			if (row % 2 == 0) {
-				c.setBackground(Color.LIGHT_GRAY);
+				c.setBackground(new Color(248, 248, 248)); // Very soft gray
 			} else {
 				c.setBackground(Color.WHITE);
 			}
+			c.setForeground(Color.BLACK); // Normal text color
 		} else {
-			c.setBackground(table.getSelectionBackground());
+			c.setBackground(new Color(255, 250, 150)); // Darker yellow highlight for better visibility
+			c.setForeground(Color.BLACK); // Black text on yellow background for readability
 		}
 		return c;
 	}

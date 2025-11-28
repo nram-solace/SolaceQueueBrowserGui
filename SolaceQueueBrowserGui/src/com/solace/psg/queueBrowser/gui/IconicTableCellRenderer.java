@@ -1,5 +1,6 @@
 package com.solace.psg.queueBrowser.gui;
 
+import java.awt.Color;
 import java.awt.Component;
 
 import javax.swing.ImageIcon;
@@ -17,6 +18,20 @@ public class IconicTableCellRenderer extends DefaultTableCellRenderer {
             label.setIcon((ImageIcon) value);
             label.setText(""); // Remove text
         }
+
+        // Apply alternating row colors and selection highlighting
+        if (!isSelected) {
+            if (row % 2 == 0) {
+                label.setBackground(new Color(248, 248, 248)); // Very soft gray
+            } else {
+                label.setBackground(Color.WHITE);
+            }
+            label.setForeground(Color.BLACK); // Normal text color
+        } else {
+            label.setBackground(new Color(255, 250, 150)); // Darker yellow highlight for better visibility
+            label.setForeground(Color.BLACK); // Black text on yellow background for readability
+        }
+
         return label;
     }
 }

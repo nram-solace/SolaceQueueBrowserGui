@@ -22,17 +22,30 @@ public class QueueBrowser {
 	private String lastIdFetched = "";
 	
 	public QueueBrowser(Broker broker, String qToBrowse) {
+		logger.info("QueueBrowser constructor called with queue: '" + qToBrowse + "'");
 		this.broker = broker;
 		this.qToBrowse = qToBrowse;
+		logger.debug("QueueBrowser initialized - broker: " + (broker != null ? broker.messagingHost : "null") + ", queue: '" + qToBrowse + "'");
 	}
 
 	public QueueBrowser(Broker broker, String qToBrowse, int paginationSize) {
+		logger.info("QueueBrowser constructor (with pagination) called with queue: '" + qToBrowse + "', pagination: " + paginationSize);
 		this.broker = broker;
 		this.qToBrowse = qToBrowse;
 		this.paginationSize = paginationSize;
 	}
 
 	private void init() throws BrokerException {
+		logger.info("QueueBrowser.init() called with queue: '" + this.qToBrowse + "'");
+		
+		// Validate queue name before proceeding
+		if (this.qToBrowse == null || this.qToBrowse.trim().isEmpty()) {
+			logger.error("Queue name validation failed - queue name is null or empty");
+			throw new BrokerException("Queue name cannot be null or empty");
+		}
+		
+		logger.debug("Queue name validation passed for: '" + this.qToBrowse + "'");
+		
 		try {
 			// Define connection properties
 			JCSMPProperties properties = new JCSMPProperties();
@@ -42,12 +55,14 @@ public class QueueBrowser {
 			properties.setProperty(JCSMPProperties.PASSWORD, this.broker.messagingPw);
 
 			// Create a session
+			logger.debug("Creating JCSMP session for host: " + this.broker.messagingHost);
 			solaceJcsmpSession = JCSMPFactory.onlyInstance().createSession(properties);
 			solaceJcsmpSession.connect();
 			logger.debug("Connected to Solace via JCSMP to " + this.broker.messagingHost);
 			
-			// Define the queue object
-			Queue queue = JCSMPFactory.onlyInstance().createQueue(this.qToBrowse);
+			// Define the queue object - ensure queue name is trimmed
+			logger.debug("Creating queue object for: '" + this.qToBrowse.trim() + "'");
+			Queue queue = JCSMPFactory.onlyInstance().createQueue(this.qToBrowse.trim());
 
 			// Create a jcsmp browser object
 			BrowserProperties browserProps = new BrowserProperties();
@@ -60,7 +75,13 @@ public class QueueBrowser {
 			solaceBrowserObject = solaceJcsmpSession.createBrowser(browserProps);
 			logger.debug("Created a queue browser object sucessfully on queue '" + this.qToBrowse + "'.");
 
+		} catch (com.solacesystems.jcsmp.AccessDeniedException e) {
+			String errorMsg = "Access denied to queue '" + this.qToBrowse + "'. " +
+							 "Check with your Solace administrator to ensure your user account has 'browse' permission for this queue.";
+			logger.error(errorMsg, e);
+			throw new BrokerException(errorMsg);
 		} catch (JCSMPException e) {
+			logger.error("JCSMP error while creating browser for queue '" + this.qToBrowse + "'", e);
 			throw new BrokerException(e);
 		}
 	}
@@ -83,7 +104,7 @@ public class QueueBrowser {
 			if (preFetchedNextMessage != null) {
 				@SuppressWarnings("deprecation")
 				String id = preFetchedNextMessage.getMessageId();
-				logger.debug("Fetched a msg, id =" + id);
+				// logger.debug("Fetched a msg, id =" + id);
 				this.lastIdFetched  = id;
 			}
 		} catch (JCSMPException e) {

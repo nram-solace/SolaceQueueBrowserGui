@@ -35,7 +35,6 @@ import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import javax.swing.border.EmptyBorder;
-import javax.swing.border.LineBorder;
 import javax.swing.table.DefaultTableModel;
 
 import com.formdev.flatlaf.FlatLightLaf;
@@ -224,7 +223,7 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 			listPanel.add(scrollingList, BorderLayout.CENTER);
 
 			detailsLabel = new JLabel();// TextArea();
-			detailsLabel.setFont(new Font("Serif", Font.ITALIC, 16));
+			detailsLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
 			
 			detailsLabel.setText("<html>"
 	                + "<div style='width: 280px; text-align: left; vertical-align:top'>"
@@ -235,10 +234,10 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 	        
 	        JPanel detailsPanel = new JPanel();
 	        detailsPanel.setLayout(new BoxLayout(detailsPanel, BoxLayout.Y_AXIS));
-			
+
 	        qIconlabel = new JLabel(new ImageIcon("config/queue.png"));
 	        qIconlabel.setVisible(false);
-	        
+
 	        //JPanel iconTopPanel = new JPanel(new BorderLayout());
 	        //iconTopPanel.add(qIconlabel, BorderLayout.CENTER);
 
@@ -250,10 +249,9 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 
 			buttonPanel = new JPanel();
 			buttonPanel.setLayout(new FlowLayout(FlowLayout.RIGHT));
-			browseButton = new JButton("Browse");
+			browseButton = new JButton("⌕ Browse");
 			browseButton.setEnabled(false);
-			browseButton.setBorder(new LineBorder(new Color(111, 66, 193), 2)); // Purple border
-			browseButton.setForeground(new Color(111, 66, 193)); // Purple text
+			browseButton.setBackground(new Color(240, 230, 255)); // Soft purple background
 			browseButton.addActionListener(new ActionListener() {
 				@Override
 				public void actionPerformed(ActionEvent e) {
@@ -265,10 +263,9 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 				}
 			});
 
-			copyAllButton = new JButton("Copy all...");
+			copyAllButton = new JButton("⎘ Copy all");
 			copyAllButton.setEnabled(false);
-			copyAllButton.setBorder(new LineBorder(new Color(13, 110, 253), 2)); // Blue border
-			copyAllButton.setForeground(new Color(13, 110, 253)); // Blue text
+			copyAllButton.setBackground(new Color(220, 235, 255)); // Soft blue background
 			copyAllButton.addActionListener(new ActionListener() {
 				@Override
 				public void actionPerformed(ActionEvent e) {
@@ -276,10 +273,9 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 				}
 			});
 
-			moveAllButton = new JButton("Move all...");
+			moveAllButton = new JButton("➜ Move all");
 			moveAllButton.setEnabled(false);
-			moveAllButton.setBorder(new LineBorder(new Color(255, 193, 7), 2)); // Yellow/Amber border
-			moveAllButton.setForeground(new Color(255, 143, 0)); // Orange text
+			moveAllButton.setBackground(new Color(255, 245, 220)); // Soft yellow background
 			moveAllButton.addActionListener(new ActionListener() {
 				@Override
 				public void actionPerformed(ActionEvent e) {
@@ -287,10 +283,9 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 				}
 			});
 
-			deleteAllButton = new JButton("Delete all");
+			deleteAllButton = new JButton("✕ Delete all");
 			deleteAllButton.setEnabled(false);
-			deleteAllButton.setBorder(new LineBorder(new Color(220, 53, 69), 2)); // Red border
-			deleteAllButton.setForeground(new Color(220, 53, 69)); // Red text
+			deleteAllButton.setBackground(new Color(255, 220, 220)); // Soft red background
 			deleteAllButton.addActionListener(new ActionListener() {
 				@Override
 				public void actionPerformed(ActionEvent e) {
@@ -299,10 +294,9 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 
 			});
 
-			refreshButton = new JButton("Refresh");
+			refreshButton = new JButton("↻ Refresh");
 			refreshButton.setEnabled(true);
-			refreshButton.setBorder(new LineBorder(new Color(13, 202, 240), 2)); // Cyan border
-			refreshButton.setForeground(new Color(13, 202, 240)); // Cyan text
+			refreshButton.setBackground(new Color(220, 245, 255)); // Soft cyan background
 			refreshButton.addActionListener(new ActionListener() {
 				@Override
 				public void actionPerformed(ActionEvent e) {
@@ -315,23 +309,19 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 			JLabel iconLabel = new JLabel("");
 			iconLabel.setIcon(icon);
 
-			JLabel greetingLine0 = new JLabel("Browsing: " + broker.name);
+			JLabel greetingLine0 = new JLabel("<html><b>Browsing:</b> <span style='font-size:110%'>" + broker.name + "</span> | <b>Broker:</b> <span style='font-size:110%'>" + broker.fqdn() + "</span></html>");
 			greetingLine0.setBorder(new EmptyBorder(0, 0, 6, 0)); // Top, Left, Bottom, Right
-			greetingLine0.setFont(new Font("Arial", Font.BOLD, 18));
+			greetingLine0.setFont(new Font("Segoe UI", Font.PLAIN, 14));
 
-			JLabel greetingLine1 = new JLabel("      FQDN: " + broker.fqdn());
+			JLabel greetingLine1 = new JLabel("<html><b>Service:</b> <span style='font-size:110%'>" + broker.msgVpnName + "</span> | <b>SEMP User:</b> <span style='font-size:110%'>" + broker.sempAdminUser + "</span> | <b>Client User:</b> <span style='font-size:110%'>" + broker.messagingClientUsername + "</span></html>");
 			greetingLine1.setBorder(new EmptyBorder(0, 0, 6, 0)); // Top, Left, Bottom, Right
-			greetingLine1.setFont(greetingLine0.getFont());
-
-			JLabel greetingLine2 = new JLabel("         VPN: " + broker.msgVpnName);
-			greetingLine2.setFont(greetingLine0.getFont());
+			greetingLine1.setFont(new Font("Segoe UI", Font.PLAIN, 14));
 
 			JPanel wordsPanel = new JPanel();
 			wordsPanel.setLayout(new BoxLayout(wordsPanel, BoxLayout.Y_AXIS));
 			wordsPanel.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4)); // Add some margin
 			wordsPanel.add(greetingLine0);
 			wordsPanel.add(greetingLine1);
-			wordsPanel.add(greetingLine2);
 
 			JPanel topPanel = new JPanel(new BorderLayout());
 			topPanel.add(iconLabel,BorderLayout.WEST);
@@ -419,11 +409,13 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 		return(String) table.getValueAt(table.getSelectedRow(), 1);
 	}
 	private void addButtons(JPanel buttonPanel) {
-		buttonPanel.add(refreshButton);
+		buttonPanel.add(browseButton);
+		buttonPanel.add(new JLabel("  |  "));
 		buttonPanel.add(copyAllButton);
 		buttonPanel.add(moveAllButton);
 		buttonPanel.add(deleteAllButton);
-		buttonPanel.add(browseButton);
+		buttonPanel.add(new JLabel("  |  "));
+		buttonPanel.add(refreshButton);
 	}
 
 	private void onBrowse(String queueName, JFrame frame) throws SempException, JCSMPException {

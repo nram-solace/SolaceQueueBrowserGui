@@ -164,20 +164,20 @@ public class PaginatedCachingBrowser {
 
 	public void prefetchNextPage() throws BrokerException {
 		int nCount = 0;
-		String logReport = " fetching a page of messages, ids=";
+		// String logReport = " fetching a page of messages, ids=";
 		while (solaceBrowserObject.hasNext() && nCount < paginationSize) {
 			BytesXMLMessage message = solaceBrowserObject.next();
-			
+
 			@SuppressWarnings("deprecation")
 			String id = message.getMessageId();
-			
+
 			if (thisMessageMatchesTheFilter(message)) {
 				nCount++;
 				allMessagesMap.put(id, message);
 			}
-			logReport += id + ",";
+			// logReport += id + ",";
 		}
-		logger.debug(logReport);
+		// logger.debug(logReport);
 	}
 	
 	private boolean stringQualificationMatch(String value1, String value2, FilterSpecification.FilterCondition condition) {

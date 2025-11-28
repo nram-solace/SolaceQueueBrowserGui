@@ -7,6 +7,7 @@ import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.Image;
 import java.awt.Point;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -49,7 +50,6 @@ import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.TransferHandler;
 import javax.swing.border.EmptyBorder;
-import javax.swing.border.LineBorder;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.JTableHeader;
 
@@ -83,7 +83,7 @@ public class BrowserDialog implements IDragDropInstigator {
 	private int estimatedPageCount = 0;
 
 	private JLabel topLabel;
-	private JLabel filterLabel;
+	private JLabel filterStatusLabel;
 	private JTextArea textArea;
 	//private JTextArea propsArea;
 	private JTable table;
@@ -155,36 +155,26 @@ public class BrowserDialog implements IDragDropInstigator {
 		// Create the top panel
 		JPanel topPanel = new JPanel(new BorderLayout());
 
-		ImageIcon icon = new ImageIcon("config/refresh48.png");
-
-        //JLabel iconLabel = new JLabel(icon);
-        JButton refreshButton = new JButton(icon);
-        refreshButton.setToolTipText("Refresh");
-        refreshButton.addActionListener(new ActionListener() {
+		JButton refreshTopButton = new JButton("↻ Refresh");
+        refreshTopButton.setBackground(new Color(220, 245, 255)); // Soft cyan background
+        refreshTopButton.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
                 onRefresh();
             }
         });
         
 
-		JPanel topTextMessages = new JPanel(new BorderLayout());
-		topTextMessages.setBorder(new EmptyBorder(10, 20, 10, 20));
-		topLabel = new JLabel("Message in the " + this.queue + " queue. Showing page " + nCurPage + " of about "
-				+ estimatedPageCount);
-		
-		String filterDescription = "Showing all messages.";
-		if (spec.isEmpty() == false) {
-			filterDescription = "<html><br>Filter: '" + spec.bodyValue + "'; showing only messages where this text is contained in the payload<br><br></html>";
-		}	
-		filterLabel = new JLabel(filterDescription );
-		topTextMessages.add(topLabel, BorderLayout.NORTH);
-//		topTextMessages.add(filterButton, BorderLayout.CENTER);
-		topTextMessages.add(filterLabel, BorderLayout.SOUTH);
-		
-		JPanel headerLabel = new JPanel(new BorderLayout());
-		headerLabel.add(refreshButton, BorderLayout.WEST);
-		
-		headerLabel.add(topTextMessages, BorderLayout.CENTER);
+		// Create filter button for top row
+		JButton filterTopButton = new JButton("▼ Filter");
+		filterTopButton.setEnabled(true);
+		filterTopButton.setBackground(new Color(240, 230, 255)); // Soft purple background
+		filterTopButton.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				onClickFilter(dialog, tableModel, filterTopButton);
+			}
+		});
+
 		
 		cboMsgsPerPage = new JComboBox<>(getPageSizes());
 		cboMsgsPerPage.setSelectedItem ("" + nItemsPerPage);
@@ -210,8 +200,9 @@ public class BrowserDialog implements IDragDropInstigator {
 		    }
 		});
 
-		JButton previousPageButton = new JButton("<< Previous Page");
+		JButton previousPageButton = new JButton("<< Prev");
 		previousPageButton.setEnabled(false);
+		previousPageButton.setBackground(new Color(230, 240, 255)); // Soft light blue background
 		previousPageButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
@@ -219,21 +210,38 @@ public class BrowserDialog implements IDragDropInstigator {
 			}
 		});
 
-		nextPageButton = new JButton("Next Page >>");
+		nextPageButton = new JButton("Next >>");
 		nextPageButton.setEnabled(false);
+		nextPageButton.setBackground(new Color(230, 240, 255)); // Soft light blue background
 		nextPageButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				onNextPage(dialog, tableModel, previousPageButton);
 			}
 		});
-		JPanel paginationLabel = new JPanel(new BorderLayout());
-		paginationLabel.add(cboMsgsPerPage, BorderLayout.WEST);
-		paginationLabel.add(previousPageButton, BorderLayout.CENTER);
-		paginationLabel.add(nextPageButton, BorderLayout.EAST);
-		paginationLabel.setBorder(new EmptyBorder(10, 20, 10, 20));
 
-		headerLabel.add(paginationLabel, BorderLayout.EAST);
+		// New top row layout: Browsing QUEUE_NAME | [<< Prev] Page N of ~ M [Next >>] | Page Size S | [Filter] (Status) | [Refresh]
+		String filterStatus = spec.isEmpty() ? "OFF" : "ON";
+		JPanel topRowPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
+		topRowPanel.add(new JLabel("<html><b>Browsing:</b> <span style='font-size:120%'>" + this.queue + "</span></html>"));
+		topRowPanel.add(new JLabel("|"));
+		topRowPanel.add(previousPageButton);
+		topLabel = new JLabel("<html><b>Page</b> <span style='font-size:120%'>" + nCurPage + "</span> <b>of ~</b> <span style='font-size:120%'>" + estimatedPageCount + "</span></html>");
+		topRowPanel.add(topLabel);
+		topRowPanel.add(nextPageButton);
+		topRowPanel.add(new JLabel("|"));
+		topRowPanel.add(new JLabel("<html><b>Page Size</b></html>"));
+		topRowPanel.add(cboMsgsPerPage);
+		topRowPanel.add(new JLabel("|"));
+		topRowPanel.add(filterTopButton);
+		filterStatusLabel = new JLabel("<html><span style='font-size:120%'>(" + filterStatus + ")</span></html>");
+		topRowPanel.add(filterStatusLabel);
+		topRowPanel.add(new JLabel("|"));
+		topRowPanel.add(refreshTopButton);
+		topRowPanel.setBorder(new EmptyBorder(10, 20, 10, 20));
+
+		JPanel headerLabel = new JPanel(new BorderLayout());
+		headerLabel.add(topRowPanel, BorderLayout.CENTER);
 
 		
 		topPanel.add(headerLabel, BorderLayout.NORTH);
@@ -272,9 +280,9 @@ public class BrowserDialog implements IDragDropInstigator {
         table.getColumnModel().getColumn(3).setPreferredWidth(remainindWidth/3);
         table.getColumnModel().getColumn(4).setPreferredWidth(remainindWidth/3);
         
-		// Enable gridlines
+		// Enable gridlines with very light color
 		table.setShowGrid(true);
-		table.setGridColor(Color.BLACK);
+		table.setGridColor(new Color(240, 240, 240)); // Very light gray, almost invisible
 		table.addMouseListener(new TableMouseListener(table, this));
 		table.addMouseMotionListener(new TableMouseMotionListener(table));
 		table.setTransferHandler(new QueueMessageTransferInstigatorHandler(this, "source"));
@@ -339,10 +347,9 @@ public class BrowserDialog implements IDragDropInstigator {
 		listScrollPane.setPreferredSize(new Dimension(380, 400));
 		topPanel.add(listScrollPane, BorderLayout.CENTER);
 
-		delButton = new JButton("Delete");
+		delButton = new JButton("✕ Delete");
 		delButton.setEnabled(false);
-		delButton.setBorder(new LineBorder(new Color(220, 53, 69), 2)); // Red border
-		delButton.setForeground(new Color(220, 53, 69)); // Red text
+		delButton.setBackground(new Color(255, 220, 220)); // Soft red background
 		delButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
@@ -352,6 +359,7 @@ public class BrowserDialog implements IDragDropInstigator {
 
 		nextMsgButton = new JButton("Next>");
 		nextMsgButton.setEnabled(false);
+		nextMsgButton.setBackground(new Color(230, 240, 255)); // Soft light blue background
 		nextMsgButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
@@ -360,16 +368,16 @@ public class BrowserDialog implements IDragDropInstigator {
 		});
 		prevMsgButton = new JButton("<Prev");
 		prevMsgButton.setEnabled(false);
+		prevMsgButton.setBackground(new Color(230, 240, 255)); // Soft light blue background
 		prevMsgButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				onPreviousMessage();
 			}
 		});
-		copyMessageMsgButton = new JButton("Copy to Queue:");
+		copyMessageMsgButton = new JButton("⎘ Copy");
 		copyMessageMsgButton.setEnabled(false);
-		copyMessageMsgButton.setBorder(new LineBorder(new Color(13, 110, 253), 2)); // Blue border
-		copyMessageMsgButton.setForeground(new Color(13, 110, 253)); // Blue text
+		copyMessageMsgButton.setBackground(new Color(220, 235, 255)); // Soft blue background
 		copyMessageMsgButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
@@ -377,10 +385,9 @@ public class BrowserDialog implements IDragDropInstigator {
 			}
 		});
 
-		moveMessageMsgButton = new JButton("Move to Queue:");
+		moveMessageMsgButton = new JButton("➜ Move");
 		moveMessageMsgButton.setEnabled(false);
-		moveMessageMsgButton.setBorder(new LineBorder(new Color(255, 193, 7), 2)); // Yellow/Amber border
-		moveMessageMsgButton.setForeground(new Color(255, 143, 0)); // Orange text
+		moveMessageMsgButton.setBackground(new Color(255, 245, 220)); // Soft yellow background
 		moveMessageMsgButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
@@ -392,10 +399,9 @@ public class BrowserDialog implements IDragDropInstigator {
         preferredSize.width = 400;
         comboBox.setPreferredSize(preferredSize);
 
-        downloadMessageMsgButton = new JButton("Download");
+        downloadMessageMsgButton = new JButton("⬇ Download");
         downloadMessageMsgButton.setEnabled(false);
-        downloadMessageMsgButton.setBorder(new LineBorder(new Color(25, 135, 84), 2)); // Green border
-        downloadMessageMsgButton.setForeground(new Color(25, 135, 84)); // Green text
+        downloadMessageMsgButton.setBackground(new Color(220, 255, 220)); // Soft green background
         downloadMessageMsgButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
@@ -403,38 +409,21 @@ public class BrowserDialog implements IDragDropInstigator {
 			}
 		});
 
-		JButton filterButton = new JButton("Filter");
-		filterButton.setEnabled(true);
-		filterButton.setBorder(new LineBorder(new Color(111, 66, 193), 2)); // Purple border
-		filterButton.setForeground(new Color(111, 66, 193)); // Purple text
-		filterButton.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				onClickFilter(dialog, tableModel, filterButton);
-			}
-		});
-
-		JPanel buttonLeftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+		JPanel buttonLeftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
 		buttonLeftPanel.add(prevMsgButton);
 		buttonLeftPanel.add(nextMsgButton);
+		buttonLeftPanel.add(new JLabel("|"));
+		buttonLeftPanel.add(copyMessageMsgButton);
+		buttonLeftPanel.add(moveMessageMsgButton);
+		buttonLeftPanel.add(new JLabel("Target Queue:"));
+		buttonLeftPanel.add(comboBox);
+		buttonLeftPanel.add(new JLabel("|"));
 		buttonLeftPanel.add(delButton);
-		buttonLeftPanel.add(filterButton);
-
-		JPanel buttonMiddlePanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
-		buttonMiddlePanel.add(moveMessageMsgButton);
-		buttonMiddlePanel.add(copyMessageMsgButton);
-		buttonMiddlePanel.add(comboBox);
-		buttonMiddlePanel.add(downloadMessageMsgButton);
-		
-		
-//		JPanel buttonRightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-//		buttonRightPanel.add(previousPageButton);
-//		buttonRightPanel.add(nextPageButton);
+		buttonLeftPanel.add(new JLabel("|"));
+		buttonLeftPanel.add(downloadMessageMsgButton);
 
 		JPanel buttonPanel = new JPanel(new BorderLayout());
 		buttonPanel.add(buttonLeftPanel, BorderLayout.WEST);
-		buttonPanel.add(buttonMiddlePanel, BorderLayout.CENTER);
-		//buttonPanel.add(buttonRightPanel, BorderLayout.EAST);
 
 		// buttonPanel.add(new JButton("Button 2"));
 		topPanel.add(buttonPanel, BorderLayout.SOUTH);
@@ -525,12 +514,7 @@ public class BrowserDialog implements IDragDropInstigator {
 		dialog.setVisible(true);
 	}
 	private String[] getPageSizes() {
-		String[] rc = new String[200];
-		for (int i = 0; i < 200; i++) {
-			Integer index = i + 1;
-			rc[i] = index.toString(); 
-		}
-		return rc;
+		return new String[] {"10", "20", "100", "200"};
 	}
 	
 	private void onRefresh() {
@@ -567,20 +551,18 @@ public class BrowserDialog implements IDragDropInstigator {
 		
 	}
 	private void restartAfterFilter(String title) {
-		
+
 		SpinnerDialog spinner = new SpinnerDialog(dialog, title);
-		
-		String filterDescription = "Showing all messages";
-		if (spec.isEmpty() == false) {
-			filterDescription = "<html><br>Showing messages that match the specified filter.<br><br></html>";
-		}	
-		filterLabel.setText(filterDescription); 
+
+		// Update filter status label
+		String filterStatus = spec.isEmpty() ? "OFF" : "ON";
+		filterStatusLabel.setText("<html><span style='font-size:120%'>(" + filterStatus + ")</span></html>");
 
 		tableModel.setRowCount(0);
 		preFetch();
 		nCurPage = 0;
 		onNextPage(dialog, tableModel, nextPageButton);
-		
+
 		spinner.setVisible(false);
 	}
 
@@ -818,6 +800,17 @@ public class BrowserDialog implements IDragDropInstigator {
     		String id = (String) table.getValueAt(i, nIdColumn);
     		ids.add(id);
     	}
+
+    	// Fallback: if no checkboxes are checked but a row is selected,
+    	// use the row selection (supports single-message operations)
+    	if (ids.isEmpty()) {
+    		int selectedRow = table.getSelectedRow();
+    		if (selectedRow >= 0 && selectedRow < table.getRowCount()) {
+    			String id = (String) table.getValueAt(selectedRow, nIdColumn);
+    			ids.add(id);
+    		}
+    	}
+
     	return ids;
 	}
 	
@@ -1115,8 +1108,7 @@ public class BrowserDialog implements IDragDropInstigator {
 	}
 
 	private void onPageChange() {
-		topLabel.setText("Message in the " + this.queue + " queue. Showing page " + nCurPage + " of up to about " 
-				+ estimatedPageCount);
+		topLabel.setText("<html><b>Page</b> <span style='font-size:120%'>" + nCurPage + "</span> <b>of ~</b> <span style='font-size:120%'>" + estimatedPageCount + "</span></html>");
 		textArea.setText("");
 	}
 
