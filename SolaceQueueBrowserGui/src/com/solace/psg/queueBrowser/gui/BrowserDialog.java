@@ -33,6 +33,7 @@ import javax.swing.BoxLayout;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JDialog;
@@ -51,6 +52,8 @@ import javax.swing.SwingUtilities;
 import javax.swing.TransferHandler;
 import javax.swing.UIManager;
 import javax.swing.border.EmptyBorder;
+import javax.swing.event.TableModelEvent;
+import javax.swing.event.TableModelListener;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.JTableHeader;
 
@@ -132,11 +135,13 @@ public class BrowserDialog implements IDragDropInstigator {
 	private SempClient sempV2ActionClient;
 	private JComboBox<String> cboMsgsPerPage;
 	private Config config; // For UI settings
+	private JCheckBox selectAllCheckBox; // Checkbox in top-left corner for select/deselect all
 
 	public Point mousePressPoint;
 	private FilterSpecification spec = new FilterSpecification();
 	private String lastIdAdded = "";
 	int numberOfMessagesOnTheCurrentPage = -1;
+	private boolean updatingSelectAllCheckBox = false; // Flag to prevent recursion
 	private String downloadFolder = "";
 	
 	private String headerFields[] = {"Destination","Delivery Mode", "Reply-To Destination", "Time-To-Live (TTL)",
@@ -400,6 +405,17 @@ public class BrowserDialog implements IDragDropInstigator {
 		table = new JTable(tableModel);
 		table.setRowHeight(33);
         table.setDragEnabled(true);
+        
+        // Add table model listener to update select-all checkbox when individual checkboxes change
+        tableModel.addTableModelListener(new TableModelListener() {
+			@Override
+			public void tableChanged(TableModelEvent e) {
+				// Only update if checkbox column (column 0) changed
+				if (e.getColumn() == 0 || e.getColumn() == TableModelEvent.ALL_COLUMNS) {
+					updateSelectAllCheckBoxState();
+				}
+			}
+		});
 
 		// Set a custom cell renderer to alternate row colors
 		table.setDefaultRenderer(Object.class, new AlternatingRowColorRenderer());
@@ -456,7 +472,7 @@ public class BrowserDialog implements IDragDropInstigator {
 		        	if (currentSelectAllState == eSelectAllState.eSelectedAll) {
 		        		newValue = false;
 		        		currentSelectAllState = eSelectAllState.eSelectedNone;
-		        		setStatus("De-selected all messages");
+		        	setStatus("De-selected all messages");
 		        	}
 		        	else {
 		        		currentSelectAllState = eSelectAllState.eSelectedAll;
@@ -469,12 +485,49 @@ public class BrowserDialog implements IDragDropInstigator {
 		            if (newValue) {
 		            	table.setRowSelectionInterval(0, table.getRowCount() - 1);
 		            }
+		            // Update the select-all checkbox state
+		            if (selectAllCheckBox != null) {
+		            	selectAllCheckBox.setSelected(newValue);
+		            }
 		            table.repaint();
 		        }
 		    }
 		});
 
+		// Create select-all checkbox for top-left corner
+		selectAllCheckBox = new JCheckBox();
+		selectAllCheckBox.setToolTipText("Select/Deselect all messages");
+		selectAllCheckBox.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				// Skip if we're updating programmatically
+				if (updatingSelectAllCheckBox) {
+					return;
+				}
+				
+				boolean newValue = selectAllCheckBox.isSelected();
+				currentSelectAllState = newValue ? eSelectAllState.eSelectedAll : eSelectAllState.eSelectedNone;
+				
+				// Update all row checkboxes
+				for (int row = 0; row < table.getRowCount(); row++) {
+					table.setValueAt(newValue, row, 0);
+				}
+				
+				// Update row selection
+				table.clearSelection();
+				if (newValue) {
+					table.setRowSelectionInterval(0, table.getRowCount() - 1);
+					setStatus(table.getRowCount() + " messages selected");
+				} else {
+					setStatus("De-selected all messages");
+				}
+				table.repaint();
+			}
+		});
+
 		JScrollPane listScrollPane = new JScrollPane(table);
+		// Set the checkbox as the corner component (top-left corner)
+		listScrollPane.setCorner(JScrollPane.UPPER_LEFT_CORNER, selectAllCheckBox);
 		listScrollPane.setPreferredSize(new Dimension(380, 400));
 		topPanel.add(listScrollPane, BorderLayout.CENTER);
 
@@ -767,6 +820,35 @@ public class BrowserDialog implements IDragDropInstigator {
 		logBoth("*** FUNCTION CALL: restartAfterFilter('" + title + "') - END ***");
 	}
 
+	private void updateSelectAllCheckBoxState() {
+		if (selectAllCheckBox == null || table.getRowCount() == 0) {
+			if (selectAllCheckBox != null) {
+				updatingSelectAllCheckBox = true;
+				selectAllCheckBox.setSelected(false);
+				updatingSelectAllCheckBox = false;
+			}
+			return;
+		}
+		
+		// Check if all checkboxes are selected
+		boolean allSelected = true;
+		for (int row = 0; row < table.getRowCount(); row++) {
+			Boolean checked = (Boolean) table.getValueAt(row, 0);
+			if (checked == null || !checked) {
+				allSelected = false;
+				break;
+			}
+		}
+		
+		// Update checkbox state (use flag to prevent recursion)
+		updatingSelectAllCheckBox = true;
+		selectAllCheckBox.setSelected(allSelected);
+		updatingSelectAllCheckBox = false;
+		
+		// Update state enum
+		currentSelectAllState = allSelected ? eSelectAllState.eSelectedAll : eSelectAllState.eSelectedNone;
+	}
+	
 	private void autoSelectFirstRow() {
 		logBoth("*** FUNCTION CALL: autoSelectFirstRow() - START ***");
 		logBoth("*** autoSelectFirstRow: table rowCount = " + table.getRowCount() + 
@@ -1421,6 +1503,10 @@ public class BrowserDialog implements IDragDropInstigator {
 		} else {
 			logBoth("*** display: dataUpdate.length = 0, skipping autoSelectFirstRow() ***");
 		}
+		
+		// Update select-all checkbox state after table is populated
+		updateSelectAllCheckBoxState();
+		
 		logBoth("*** display: numberOfMessagesOnTheCurrentPage = " + numberOfMessagesOnTheCurrentPage + 
 			", tableModel final rowCount = " + tableModel.getRowCount() + " ***");
 		logBothWithThread("*** FUNCTION CALL: display() - END ***");
