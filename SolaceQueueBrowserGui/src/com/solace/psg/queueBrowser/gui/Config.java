@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import com.solace.psg.brokers.Broker;
@@ -13,7 +14,9 @@ import com.solace.psg.util.FileUtils;
 public class Config {
 	
 	private String configFile;
-	public Broker broker;
+	public List<Broker> brokers = new ArrayList<Broker>();
+	public Broker broker; // Currently selected broker (for backward compatibility)
+	private int selectedBrokerIndex = 0;
 	public String downloadFolder = "./downloads";
 	
 	// UI Configuration - OS-agnostic defaults
@@ -68,18 +71,31 @@ public class Config {
 			}
 		}
 
-		JSONObject eventBroker = doc.getJSONObject("eventBroker");
-		
-		broker = new Broker();
-		broker.sempHost = eventBroker.getString("sempHost");
-        broker.msgVpnName = eventBroker.getString("msgVpnName");
-        broker.sempAdminUser = eventBroker.getString("sempAdminUser");
-        broker.sempAdminPw = eventBroker.getString("sempAdminPw");
-        broker.name = eventBroker.getString("name");
-        
-		broker.messagingHost = eventBroker.getString("messagingHost");
-        broker.messagingClientUsername = eventBroker.getString("messagingClientUsername");
-        broker.messagingPw = eventBroker.getString("messagingPw");
+		// Load event brokers - support both array and single object for backward compatibility
+		if (doc.has("eventBrokers")) {
+			// New format: array of brokers
+			JSONArray eventBrokersArray = doc.getJSONArray("eventBrokers");
+			if (eventBrokersArray.length() == 0) {
+				throw new BrokerException("Configuration must contain at least one event broker");
+			}
+			for (int i = 0; i < eventBrokersArray.length(); i++) {
+				JSONObject eventBroker = eventBrokersArray.getJSONObject(i);
+				Broker b = createBrokerFromJson(eventBroker);
+				brokers.add(b);
+			}
+			// Set first broker as default selected broker
+			broker = brokers.get(0);
+			selectedBrokerIndex = 0;
+		} else if (doc.has("eventBroker")) {
+			// Old format: single broker object (backward compatibility)
+			JSONObject eventBroker = doc.getJSONObject("eventBroker");
+			Broker b = createBrokerFromJson(eventBroker);
+			brokers.add(b);
+			broker = b;
+			selectedBrokerIndex = 0;
+		} else {
+			throw new BrokerException("Configuration must contain either 'eventBroker' or 'eventBrokers'");
+		}
         
         /* This code removed for V1 release
          * 
@@ -125,4 +141,61 @@ public class Config {
         return rc;
 	}
 	*/
+	
+	private Broker createBrokerFromJson(JSONObject eventBroker) throws BrokerException {
+		Broker b = new Broker();
+		b.sempHost = eventBroker.getString("sempHost");
+		b.msgVpnName = eventBroker.getString("msgVpnName");
+		b.sempAdminUser = eventBroker.getString("sempAdminUser");
+		b.sempAdminPw = eventBroker.getString("sempAdminPw");
+		b.name = eventBroker.getString("name");
+		b.messagingHost = eventBroker.getString("messagingHost");
+		b.messagingClientUsername = eventBroker.getString("messagingClientUsername");
+		b.messagingPw = eventBroker.getString("messagingPw");
+		return b;
+	}
+	
+	/**
+	 * Get the list of all configured brokers
+	 * @return List of Broker objects
+	 */
+	public List<Broker> getBrokers() {
+		return brokers;
+	}
+	
+	/**
+	 * Get the currently selected broker index
+	 * @return Index of selected broker
+	 */
+	public int getSelectedBrokerIndex() {
+		return selectedBrokerIndex;
+	}
+	
+	/**
+	 * Set the selected broker by index
+	 * @param index Index of broker to select
+	 * @throws BrokerException if index is out of range
+	 */
+	public void setSelectedBrokerIndex(int index) throws BrokerException {
+		if (index < 0 || index >= brokers.size()) {
+			throw new BrokerException("Invalid broker index: " + index);
+		}
+		selectedBrokerIndex = index;
+		broker = brokers.get(index);
+	}
+	
+	/**
+	 * Set the selected broker by name
+	 * @param name Name of broker to select
+	 * @throws BrokerException if broker with name is not found
+	 */
+	public void setSelectedBrokerByName(String name) throws BrokerException {
+		for (int i = 0; i < brokers.size(); i++) {
+			if (brokers.get(i).name.equals(name)) {
+				setSelectedBrokerIndex(i);
+				return;
+			}
+		}
+		throw new BrokerException("Broker not found: " + name);
+	}
 }

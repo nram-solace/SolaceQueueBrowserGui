@@ -23,6 +23,7 @@ import javax.swing.BoxLayout;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
+import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -82,6 +83,10 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 	private DefaultTableModel tableModel;
 
 	private JTable table;
+	
+	private JComboBox<String> brokerComboBox;
+	private JLabel greetingLine0;
+	private JLabel greetingLine1;
 
 
 	class ListItem {
@@ -112,6 +117,13 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 		thisCfg.load();
 		broker = thisCfg.broker;
 		
+		// Initialize connections for the selected broker
+		initializeBrokerConnections();
+		
+		this.iconCellRenderer = new IconicTableCellRenderer();
+	}
+	
+	private void initializeBrokerConnections() throws BrokerException {
 		// Test SEMP connections upfront
 		try {
 			sempV2ConfigClient = SempClient.SempClientFactory(eApi.eConfig, broker.sempHost, broker.sempAdminUser,
@@ -158,8 +170,6 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 			// Don't throw exception - allow UI to launch so user can see queue list
 			// The error dialog will inform them of the issue
 		}
-		
-		this.iconCellRenderer = new IconicTableCellRenderer();
 	}
 	
 	/**
@@ -394,17 +404,57 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 			// Use Serif font like the queue details panel for consistency
 			// Two-line format like nram-dev but with plain text and Serif font
 			String headerFontFamily = (thisCfg.fontFamily != null && !thisCfg.fontFamily.isEmpty()) ? thisCfg.fontFamily : "Serif";
-			JLabel greetingLine0 = new JLabel("Browsing: " + broker.name + " | Broker: " + broker.fqdn());
+			
+			// Create broker selection combo box if multiple brokers are available
+			JPanel brokerSelectionPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+			if (thisCfg.getBrokers().size() > 1) {
+				JLabel brokerLabel = new JLabel("Event Broker:");
+				brokerLabel.setFont(new Font(headerFontFamily, Font.PLAIN, 16));
+				brokerSelectionPanel.add(brokerLabel);
+				
+				// Create combo box with broker names
+				String[] brokerNames = new String[thisCfg.getBrokers().size()];
+				for (int i = 0; i < thisCfg.getBrokers().size(); i++) {
+					brokerNames[i] = thisCfg.getBrokers().get(i).name;
+				}
+				brokerComboBox = new JComboBox<String>(brokerNames);
+				brokerComboBox.setSelectedIndex(thisCfg.getSelectedBrokerIndex());
+				brokerComboBox.setFont(new Font(headerFontFamily, Font.PLAIN, 16));
+				brokerComboBox.addActionListener(new ActionListener() {
+					@Override
+					public void actionPerformed(ActionEvent e) {
+						@SuppressWarnings("unchecked")
+						JComboBox<String> cb = (JComboBox<String>) e.getSource();
+						String selectedBrokerName = (String) cb.getSelectedItem();
+						try {
+							switchBroker(selectedBrokerName);
+						} catch (BrokerException ex) {
+							JOptionPane.showMessageDialog(frame, 
+								"Failed to switch broker: " + ex.getMessage(),
+								"Broker Switch Failed",
+								JOptionPane.ERROR_MESSAGE);
+							// Reset combo box to previous selection
+							cb.setSelectedIndex(thisCfg.getSelectedBrokerIndex());
+						}
+					}
+				});
+				brokerSelectionPanel.add(brokerComboBox);
+			}
+			
+			greetingLine0 = new JLabel("Browsing: " + broker.name + " | Broker: " + broker.fqdn());
 			greetingLine0.setBorder(new EmptyBorder(0, 0, 6, 0)); // Top, Left, Bottom, Right
 			greetingLine0.setFont(new Font(headerFontFamily, Font.PLAIN, 16));
 
-			JLabel greetingLine1 = new JLabel("Service: " + broker.msgVpnName + " | SEMP User: " + broker.sempAdminUser + " | Client User: " + broker.messagingClientUsername);
+			greetingLine1 = new JLabel("Service: " + broker.msgVpnName + " | SEMP User: " + broker.sempAdminUser + " | Client User: " + broker.messagingClientUsername);
 			greetingLine1.setBorder(new EmptyBorder(0, 0, 6, 0)); // Top, Left, Bottom, Right
 			greetingLine1.setFont(greetingLine0.getFont());
 
 			JPanel wordsPanel = new JPanel();
 			wordsPanel.setLayout(new BoxLayout(wordsPanel, BoxLayout.Y_AXIS));
 			wordsPanel.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4)); // Add some margin
+			if (thisCfg.getBrokers().size() > 1) {
+				wordsPanel.add(brokerSelectionPanel);
+			}
 			wordsPanel.add(greetingLine0);
 			wordsPanel.add(greetingLine1);
 
@@ -427,6 +477,64 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 
 			frame.setVisible(true);
 	}
+	private void switchBroker(String brokerName) throws BrokerException {
+		frame.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+		
+		try {
+			// Update config to use the selected broker
+			thisCfg.setSelectedBrokerByName(brokerName);
+			broker = thisCfg.broker;
+			
+			// Reinitialize connections for the new broker
+			initializeBrokerConnections();
+			
+			// Update UI labels
+			greetingLine0.setText("Browsing: " + broker.name + " | Broker: " + broker.fqdn());
+			greetingLine1.setText("Service: " + broker.msgVpnName + " | SEMP User: " + broker.sempAdminUser + " | Client User: " + broker.messagingClientUsername);
+			
+			// Refresh queue list
+			DefaultTableModel model = (DefaultTableModel) table.getModel();
+			model.setRowCount(0); // Clears all existing rows
+			
+			Object[][] newData = getTableData(queues);
+			for (Object[] rowData : newData) {
+				model.addRow(rowData); // Add new rows
+			}
+			
+			// Clear selection and disable buttons
+			selectedQueue = "";
+			selectedQueueMsgCount = 0;
+			browseButton.setEnabled(false);
+			copyAllButton.setEnabled(false);
+			deleteAllButton.setEnabled(false);
+			moveAllButton.setEnabled(false);
+			
+			// Reset details label
+			String placeholderFontFamily = (thisCfg.fontFamily != null && !thisCfg.fontFamily.isEmpty()) ? thisCfg.fontFamily : Font.SANS_SERIF;
+			detailsLabel.setText("<html>"
+					+ "<div style='width: 280px; text-align: left; vertical-align:top; font-family: " + placeholderFontFamily + ";'>"
+					+ "<p>Select a queue on the left to see details.</p>"
+					+ "</div>"
+					+ "</html>");
+			qIconlabel.setVisible(false);
+			
+			logger.info("Switched to broker: " + brokerName);
+			
+		} catch (BrokerException e) {
+			frame.setCursor(Cursor.getDefaultCursor());
+			throw e;
+		} catch (Exception e) {
+			frame.setCursor(Cursor.getDefaultCursor());
+			String errorMsg = "Failed to switch broker: " + e.getMessage();
+			if (e.getCause() != null) {
+				errorMsg += " - Cause: " + e.getCause().getMessage();
+			}
+			throw new BrokerException(errorMsg);
+		} finally {
+			frame.setCursor(Cursor.getDefaultCursor());
+		}
+	}
+	
 	private void onRefresh() {
 		frame.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
 		
