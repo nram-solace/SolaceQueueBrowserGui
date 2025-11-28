@@ -51,4 +51,4 @@ echo "   Config: $CONFIG_FILE"
 echo ""
 
 # Run the application
-java -jar "$JAR_FILE" "$CONFIG_FILE"
+java -jar "$JAR_FILE" -config "$CONFIG_FILE"
