@@ -379,7 +379,7 @@ public class BrowserDialog implements IDragDropInstigator {
 		topPanel.add(headerLabel, BorderLayout.NORTH);
 		
 		String[][] data = new String[][] {};
-		String[] columnNames = { "Select", "", "Message Id", "Size", "Redelivered?" };
+		String[] columnNames = { "Checkbox", "", "Message Id", "Size", "Redelivered?" };
 
 		// Create the table model
 		tableModel = new DefaultTableModel(data, columnNames) {
@@ -468,7 +468,6 @@ public class BrowserDialog implements IDragDropInstigator {
 		            table.clearSelection();
 		            if (newValue) {
 		            	table.setRowSelectionInterval(0, table.getRowCount() - 1);
-		            	JOptionPane.showMessageDialog(dialog, "Multi-message selection is in beta. Some features may not work as expected!", "Notice", JOptionPane.INFORMATION_MESSAGE);
 		            }
 		            table.repaint();
 		        }
