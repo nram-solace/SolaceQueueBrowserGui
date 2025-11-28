@@ -625,7 +625,7 @@ public class SempClient {
 		String resource = "/msgVpns/" + msgVpnName + "/queues/" + queueName;
 		String result = getSempV2(resource, ePaginationBehavior.eNone);
 		
-		System.out.println(result);
+		// Suppressed: System.out.println(result); // Long JSON output suppressed for cleaner UI
 		
 		JSONObject doc = new JSONObject(result);
 		JSONObject data = doc.getJSONObject("data");
