@@ -850,10 +850,22 @@ public class BrowserDialog implements IDragDropInstigator {
 
 		logBoth("*** restartAfterFilter: Clearing table model ***");
 		tableModel.setRowCount(0);
+		
+		// If filter is active, adjust page size using heuristic BEFORE preFetch/onNextPage
+		// This ensures browser is reinitialized with correct page size before loading messages
+		if (!spec.isEmpty() && browser != null) {
+			logBoth("*** restartAfterFilter: Filter is active, calling adjustPageSizeForFilter() ***");
+			adjustPageSizeForFilter();
+		} else {
+			logBoth("*** restartAfterFilter: Filter check - spec.isEmpty()=" + spec.isEmpty() + 
+				", browser=" + (browser != null ? "not null" : "null") + " ***");
+		}
+		
 		logBoth("*** restartAfterFilter: Calling preFetch() ***");
 		preFetch();
 		logBoth("*** restartAfterFilter: Setting nCurPage = 0 ***");
 		nCurPage = 0;
+		
 		logBoth("*** restartAfterFilter: Calling onNextPage() ***");
 		onNextPage(dialog, tableModel, nextPageButton);
 		logBoth("*** restartAfterFilter: onNextPage() completed ***");
@@ -1673,8 +1685,27 @@ public class BrowserDialog implements IDragDropInstigator {
 	private void onPageChange() {
 		logBoth("*** FUNCTION CALL: onPageChange() - nCurPage = " + nCurPage + 
 			", estimatedPageCount = " + estimatedPageCount + " ***");
+		
+		// Build page text based on filter status
+		String pageText;
+		if (!spec.isEmpty() && browser != null && lastIdAdded != null && !lastIdAdded.isEmpty()) {
+			// Filter is active: check if there are more filtered messages
+			boolean hasMore = browser.hasMoreAfterId(lastIdAdded);
+			if (!hasMore) {
+				// No more filtered messages: show exact page count
+				pageText = "Page " + nCurPage + " of " + nCurPage;
+			} else {
+				// More filtered messages exist: show unknown
+				pageText = "Page " + nCurPage + " of UNK";
+			}
+			logBoth("*** onPageChange: Filter active, hasMore=" + hasMore + ", pageText='" + pageText + "' ***");
+		} else {
+			// No filter: use estimated page count
+			pageText = "Page " + nCurPage + " of ~ " + estimatedPageCount;
+			logBoth("*** onPageChange: No filter, pageText='" + pageText + "' ***");
+		}
+		
 		// Update topLabel with plain text (no HTML) using Serif font
-		String pageText = "Page " + nCurPage + " of ~ " + estimatedPageCount;
 		topLabel.setText(pageText);
 		logBoth("*** onPageChange: topLabel set to '" + pageText + "' ***");
 		textArea.setText("");
@@ -1684,23 +1715,107 @@ public class BrowserDialog implements IDragDropInstigator {
 	/**
 	 * Recalculate the estimated page count based on the message count from main window and current page size.
 	 * Uses the original estimated message count and adjusts for deletions/moves.
+	 * When a filter is active, page count is handled in onPageChange() based on hasMoreAfterId().
 	 */
 	private void recalculateEstimatedPageCount() {
-		// Use the stored message count from main window (adjusted for deletions/moves)
-		// Recalculate page count: (totalMessages / itemsPerPage) + 1
-		// Ensure at least 1 page even if no messages
-		if (estimatedTotalMessageCount > 0) {
-			estimatedPageCount = (estimatedTotalMessageCount / nItemsPerPage) + 1;
+		// Only recalculate if no filter is active
+		// When filter is active, page count is determined dynamically in onPageChange()
+		if (spec.isEmpty()) {
+			// No filter: use the stored message count from main window (adjusted for deletions/moves)
+			// Recalculate page count: (totalMessages / itemsPerPage) + 1
+			// Ensure at least 1 page even if no messages
+			if (estimatedTotalMessageCount > 0) {
+				estimatedPageCount = (estimatedTotalMessageCount / nItemsPerPage) + 1;
+			} else {
+				estimatedPageCount = 1;
+			}
+			
+			logBoth("*** recalculateEstimatedPageCount: No filter, estimatedTotalMessageCount=" + estimatedTotalMessageCount + 
+				", nItemsPerPage=" + nItemsPerPage + 
+				", new estimatedPageCount=" + estimatedPageCount + " ***");
 		} else {
-			estimatedPageCount = 1;
+			logBoth("*** recalculateEstimatedPageCount: Filter active, page count handled in onPageChange() ***");
 		}
 		
-		logBoth("*** recalculateEstimatedPageCount: estimatedTotalMessageCount=" + estimatedTotalMessageCount + 
-			", nItemsPerPage=" + nItemsPerPage + 
-			", new estimatedPageCount=" + estimatedPageCount + " ***");
-		
-		// Update the UI label
+		// Update the UI label (will use filter-aware logic if filter is active)
 		onPageChange();
+	}
+	
+	/**
+	 * Adjust page size when a filter is applied using a heuristic approach.
+	 * Sets page size to a reasonable default (20) when filter is first applied,
+	 * without scanning the entire queue to determine exact filtered count.
+	 */
+	private void adjustPageSizeForFilter() {
+		logBoth("*** FUNCTION CALL: adjustPageSizeForFilter() - START ***");
+		logBoth("*** adjustPageSizeForFilter: spec.isEmpty()=" + spec.isEmpty() + 
+			", browser=" + (browser != null ? "not null" : "null") + 
+			", current nItemsPerPage=" + nItemsPerPage + " ***");
+		
+		// Only adjust if a filter is active
+		if (spec.isEmpty() || browser == null) {
+			logBoth("*** adjustPageSizeForFilter: Early return - filter not active or browser null ***");
+			return;
+		}
+		
+		// Use heuristic: set page size to 20 when filter is applied
+		// This is a reasonable default that works well for filtered results
+		// without needing to scan the entire queue
+		int heuristicPageSize = 20;
+		
+		logBoth("*** adjustPageSizeForFilter: heuristicPageSize=" + heuristicPageSize + 
+			", current nItemsPerPage=" + nItemsPerPage + " ***");
+		
+		// Always set to heuristic value when filter is applied
+		// This ensures consistent page size for filtered results
+		boolean pageSizeChanged = (nItemsPerPage != heuristicPageSize);
+		
+		if (pageSizeChanged) {
+			logBoth("*** adjustPageSizeForFilter: Filter applied, adjusting page size from " + 
+				nItemsPerPage + " to heuristic value " + heuristicPageSize + " ***");
+			
+			// Update page size
+			nItemsPerPage = heuristicPageSize;
+			
+			// Update the combo box without triggering refresh
+			if (cboMsgsPerPage != null) {
+				logBoth("*** adjustPageSizeForFilter: Updating combo box to " + heuristicPageSize + " ***");
+				// Temporarily remove listener to avoid triggering refresh
+				ActionListener[] listeners = cboMsgsPerPage.getActionListeners();
+				for (ActionListener listener : listeners) {
+					cboMsgsPerPage.removeActionListener(listener);
+				}
+				
+				cboMsgsPerPage.setSelectedItem("" + heuristicPageSize);
+				
+				// Re-add listeners
+				for (ActionListener listener : listeners) {
+					cboMsgsPerPage.addActionListener(listener);
+				}
+				logBoth("*** adjustPageSizeForFilter: Combo box updated successfully ***");
+			} else {
+				logBoth("*** adjustPageSizeForFilter: WARNING - cboMsgsPerPage is null ***");
+			}
+		} else {
+			logBoth("*** adjustPageSizeForFilter: Page size already at heuristic value " + heuristicPageSize + 
+				", no combo box update needed ***");
+		}
+		
+		// Always reinitialize browser when filter is applied (even if page size unchanged)
+		// This ensures browser has the correct filter and page size settings
+		try {
+			logBoth("*** adjustPageSizeForFilter: Reinitializing browser with page size " + nItemsPerPage + 
+				" (pageSizeChanged=" + pageSizeChanged + ") ***");
+			initialize(); // Recreates browser with current page size and filter
+			logBoth("*** adjustPageSizeForFilter: Browser reinitialized successfully ***");
+			// Recalculate page count with current size (will use cached count or heuristic for filtered results)
+			recalculateEstimatedPageCount();
+		} catch (SempException e) {
+			logBoth("*** adjustPageSizeForFilter: ERROR - Failed to reinitialize browser: " + e.getMessage() + " ***");
+			logger.error("Failed to reinitialize browser with new page size", e);
+		}
+		
+		logBoth("*** FUNCTION CALL: adjustPageSizeForFilter() - END ***");
 	}
 
 	private void display(DefaultTableModel tableModel, Object[][] dataUpdate) {
@@ -1730,6 +1845,23 @@ public class BrowserDialog implements IDragDropInstigator {
 		
 		// Update select-all checkbox state after table is populated
 		updateSelectAllCheckBoxState();
+		
+		// If filter is active, recalculate page count after displaying messages
+		// This updates the page count based on cached messages (more accurate than total queue count)
+		if (!spec.isEmpty() && browser != null) {
+			logBoth("*** display: Filter active, recalculating page count based on cached messages ***");
+			recalculateEstimatedPageCount();
+		}
+		
+		// Update Next button state after displaying messages
+		// This ensures Next button is disabled when no more filtered messages exist
+		if (nextPageButton != null) {
+			boolean shouldEnable = shouldNextPageButtonBeActive();
+			nextPageButton.setEnabled(shouldEnable);
+			logBoth("*** display: Updated nextPageButton enabled=" + shouldEnable + 
+				" (numberOfMessagesOnTheCurrentPage=" + numberOfMessagesOnTheCurrentPage + 
+				", nItemsPerPage=" + nItemsPerPage + ") ***");
+		}
 		
 		logBoth("*** display: numberOfMessagesOnTheCurrentPage = " + numberOfMessagesOnTheCurrentPage + 
 			", tableModel final rowCount = " + tableModel.getRowCount() + " ***");
@@ -1790,7 +1922,54 @@ public class BrowserDialog implements IDragDropInstigator {
 	}
 
 	private boolean shouldNextPageButtonBeActive() {
-		return browser.hasMoreAfterId(lastIdAdded);
+		if (browser == null) {
+			return false;
+		}
+		
+		// If no messages on current page, disable Next button
+		if (numberOfMessagesOnTheCurrentPage == 0) {
+			logBoth("*** shouldNextPageButtonBeActive: No messages on current page, disabling Next button ***");
+			return false;
+		}
+		
+		// Need lastIdAdded to check for more messages
+		if (lastIdAdded == null || lastIdAdded.isEmpty()) {
+			logBoth("*** shouldNextPageButtonBeActive: lastIdAdded is null or empty, disabling Next button ***");
+			return false;
+		}
+		
+		// If filter is active, check if there are more filtered messages
+		if (!spec.isEmpty()) {
+			// Check if current page has fewer messages than page size (partial page = end of filtered results)
+			boolean partialPage = (numberOfMessagesOnTheCurrentPage > 0 && numberOfMessagesOnTheCurrentPage < nItemsPerPage);
+			
+			// Also check if there are more messages after the last ID
+			boolean hasMore = browser.hasMoreAfterId(lastIdAdded);
+			
+			// If we have a partial page, we've reached the end of filtered messages
+			// Even if hasMore is true (there might be unfiltered messages), we should disable Next
+			if (partialPage) {
+				logBoth("*** shouldNextPageButtonBeActive: Filter active, partial page detected (" + 
+					numberOfMessagesOnTheCurrentPage + " < " + nItemsPerPage + "), disabling Next button ***");
+				return false;
+			}
+			
+			// If no partial page but hasMore is false, also disable
+			if (!hasMore) {
+				logBoth("*** shouldNextPageButtonBeActive: Filter active, hasMore=false, disabling Next button ***");
+				return false;
+			}
+			
+			// Page is full and hasMore is true, enable Next
+			logBoth("*** shouldNextPageButtonBeActive: Filter active, full page (" + 
+				numberOfMessagesOnTheCurrentPage + " = " + nItemsPerPage + ") and hasMore=true, enabling Next button ***");
+			return true;
+		} else {
+			// No filter: use standard check
+			boolean hasMore = browser.hasMoreAfterId(lastIdAdded);
+			logBoth("*** shouldNextPageButtonBeActive: No filter, hasMore=" + hasMore + " ***");
+			return hasMore;
+		}
 	}
 	
 	int rowCount = 0;
@@ -1848,12 +2027,14 @@ public class BrowserDialog implements IDragDropInstigator {
 		}
 		
 		// see if the browser has any more messages after the last one onscreen
+		// This now handles filtered messages correctly
 		boolean hasMore = shouldNextPageButtonBeActive();
 		if (nextPageButton != null) {
 			boolean wasEnabled = nextPageButton.isEnabled();
 			nextPageButton.setEnabled(hasMore);
 			logBoth("*** onNextPage: nextPageButton enabled set to " + hasMore + " (was " + wasEnabled + 
-				", hasMoreAfterId = " + hasMore + ") ***");
+				", numberOfMessagesOnTheCurrentPage=" + numberOfMessagesOnTheCurrentPage + 
+				", nItemsPerPage=" + nItemsPerPage + ") ***");
 		} else {
 			logBoth("*** onNextPage: WARNING - nextPageButton is null! ***");
 		}
