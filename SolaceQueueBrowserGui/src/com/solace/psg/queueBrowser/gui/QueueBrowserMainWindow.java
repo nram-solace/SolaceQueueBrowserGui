@@ -211,9 +211,12 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 			ImageIcon icon = new ImageIcon("config/queueBrowserIcon.png");
 			Image image = icon.getImage();
 			frame.setIconImage(image);
+			
+			// Resize icon to half size for display in header
+			ImageIcon headerIcon = new ImageIcon(image.getScaledInstance(icon.getIconWidth() / 2, icon.getIconHeight() / 2, Image.SCALE_SMOOTH));
 
 			Object[][] data = getTableData(queues);// new String[][] {};
-			String[] columnNames = { "", "Queue Name"};
+			String[] columnNames = { "", "Queues"};
 
 			// Create the table model
 			tableModel = new DefaultTableModel(data, columnNames) {
@@ -300,10 +303,6 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 			
 			JPanel listPanel = new JPanel(new BorderLayout());
 			listPanel.setPreferredSize(new Dimension(400, listPanel.getPreferredSize().height)); // Set the preferred width
-			JLabel queuesLabel = new JLabel("Queues");
-			String queuesFontFamily = (thisCfg.fontFamily != null && !thisCfg.fontFamily.isEmpty()) ? thisCfg.fontFamily : "Serif";
-			queuesLabel.setFont(new Font(queuesFontFamily, Font.PLAIN, 16));
-			listPanel.add(queuesLabel, BorderLayout.NORTH);
 			
 			JScrollPane scrollingList = new JScrollPane(table);
 			scrollingList.setBorder(new EmptyBorder(4, 4, 4, 4)); // Top, Left, Bottom, Right
@@ -399,18 +398,22 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 			this.addButtons(buttonPanel);
 
 			JLabel iconLabel = new JLabel("");
-			iconLabel.setIcon(icon);
+			iconLabel.setIcon(headerIcon);
 
 			// Use Serif font like the queue details panel for consistency
-			// Two-line format like nram-dev but with plain text and Serif font
 			String headerFontFamily = (thisCfg.fontFamily != null && !thisCfg.fontFamily.isEmpty()) ? thisCfg.fontFamily : "Serif";
 			
+			// Create top panel with horizontal layout: icon, broker selector, and connection info
+			JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4)); // 8px horizontal gap, 4px vertical gap
+			
+			// Add icon
+			topPanel.add(iconLabel);
+			
 			// Create broker selection combo box if multiple brokers are available
-			JPanel brokerSelectionPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
 			if (thisCfg.getBrokers().size() > 1) {
 				JLabel brokerLabel = new JLabel("Event Broker:");
 				brokerLabel.setFont(new Font(headerFontFamily, Font.PLAIN, 16));
-				brokerSelectionPanel.add(brokerLabel);
+				topPanel.add(brokerLabel);
 				
 				// Create combo box with broker names
 				String[] brokerNames = new String[thisCfg.getBrokers().size()];
@@ -438,36 +441,20 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 						}
 					}
 				});
-				brokerSelectionPanel.add(brokerComboBox);
+				topPanel.add(brokerComboBox);
 			}
 			
-			greetingLine0 = new JLabel("Browsing: " + broker.name + " | Broker: " + broker.fqdn());
-			greetingLine0.setBorder(new EmptyBorder(0, 0, 6, 0)); // Top, Left, Bottom, Right
+			// Create single line connection info: Broker: host | Service: VPN | SEMP User: user | Client User: user
+			greetingLine0 = new JLabel("Broker: " + broker.fqdn() + " | Service: " + broker.msgVpnName + " | SEMP User: " + broker.sempAdminUser + " | Client User: " + broker.messagingClientUsername);
 			greetingLine0.setFont(new Font(headerFontFamily, Font.PLAIN, 16));
-
-			greetingLine1 = new JLabel("Service: " + broker.msgVpnName + " | SEMP User: " + broker.sempAdminUser + " | Client User: " + broker.messagingClientUsername);
-			greetingLine1.setBorder(new EmptyBorder(0, 0, 6, 0)); // Top, Left, Bottom, Right
-			greetingLine1.setFont(greetingLine0.getFont());
-
-			JPanel wordsPanel = new JPanel();
-			wordsPanel.setLayout(new BoxLayout(wordsPanel, BoxLayout.Y_AXIS));
-			wordsPanel.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4)); // Add some margin
-			if (thisCfg.getBrokers().size() > 1) {
-				wordsPanel.add(brokerSelectionPanel);
-			}
-			wordsPanel.add(greetingLine0);
-			wordsPanel.add(greetingLine1);
-
-			JPanel topPanel = new JPanel(new BorderLayout());
-			topPanel.add(iconLabel,BorderLayout.WEST);
-			topPanel.add(wordsPanel,BorderLayout.CENTER);
+			topPanel.add(new JLabel("  ")); // Add some space before connection info
+			topPanel.add(greetingLine0);
+			
+			// greetingLine1 is no longer needed, but keep it for switchBroker() method compatibility
+			greetingLine1 = new JLabel(""); // Empty label for compatibility
 
 			JPanel rightPanel = new JPanel();
 			rightPanel.setLayout(new BorderLayout());
-			JLabel queueDetailsLabel = new JLabel("Queue details");
-			String queueDetailsFontFamily = (thisCfg.fontFamily != null && !thisCfg.fontFamily.isEmpty()) ? thisCfg.fontFamily : "Serif";
-			queueDetailsLabel.setFont(new Font(queueDetailsFontFamily, Font.PLAIN, 16));
-			rightPanel.add(queueDetailsLabel, BorderLayout.NORTH);
 			rightPanel.add(textScrollPane, BorderLayout.CENTER);
 
 			frame.add(topPanel, BorderLayout.NORTH);
@@ -489,8 +476,7 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 			initializeBrokerConnections();
 			
 			// Update UI labels
-			greetingLine0.setText("Browsing: " + broker.name + " | Broker: " + broker.fqdn());
-			greetingLine1.setText("Service: " + broker.msgVpnName + " | SEMP User: " + broker.sempAdminUser + " | Client User: " + broker.messagingClientUsername);
+			greetingLine0.setText("Broker: " + broker.fqdn() + " | Service: " + broker.msgVpnName + " | SEMP User: " + broker.sempAdminUser + " | Client User: " + broker.messagingClientUsername);
 			
 			// Refresh queue list
 			DefaultTableModel model = (DefaultTableModel) table.getModel();
