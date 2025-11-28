@@ -48,6 +48,7 @@ import com.solace.psg.brokers.semp.SempClient;
 import com.solace.psg.brokers.semp.SempClient.QueueInfo;
 import com.solace.psg.brokers.semp.SempClient.eApi;
 import com.solace.psg.brokers.semp.SempException;
+import com.solace.psg.queueBrowser.PaginatedCachingBrowser;
 import com.solace.psg.queueBrowser.gui.QueueActionWindow.eAction;
 import com.solace.psg.queueBrowser.gui.dragAndDrop.DroppableMessage;
 import com.solace.psg.queueBrowser.gui.dragAndDrop.IDragDropTarget;
@@ -110,15 +111,53 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 		thisCfg = new Config(this.configFile);
 		thisCfg.load();
 		broker = thisCfg.broker;
-		sempV2ConfigClient = SempClient.SempClientFactory(eApi.eConfig, broker.sempHost, broker.sempAdminUser,
-				broker.sempAdminPw);
-		sempV2ActionClient = SempClient.SempClientFactory(eApi.eAction, broker.sempHost, broker.sempAdminUser,
-				broker.sempAdminPw);
-		sempV2MonitorClient = SempClient.SempClientFactory(eApi.eMonitor, broker.sempHost, broker.sempAdminUser,
-				broker.sempAdminPw);
-		queues = sempV2ConfigClient.getAllQueueNames(broker.msgVpnName);
 		
-		Collections.sort(queues);
+		// Test SEMP connections upfront
+		try {
+			sempV2ConfigClient = SempClient.SempClientFactory(eApi.eConfig, broker.sempHost, broker.sempAdminUser,
+					broker.sempAdminPw);
+			sempV2ActionClient = SempClient.SempClientFactory(eApi.eAction, broker.sempHost, broker.sempAdminUser,
+					broker.sempAdminPw);
+			sempV2MonitorClient = SempClient.SempClientFactory(eApi.eMonitor, broker.sempHost, broker.sempAdminUser,
+					broker.sempAdminPw);
+			queues = sempV2ConfigClient.getAllQueueNames(broker.msgVpnName);
+			Collections.sort(queues);
+			logger.info("SEMP connection successful. Found " + queues.size() + " queues.");
+		} catch (SempException e) {
+			String errorMsg = "SEMP connection failed: " + e.getMessage();
+			logger.error(errorMsg, e);
+			throw new BrokerException(errorMsg);
+		}
+		
+		// Test SMF connection upfront by creating a test browser instance
+		try {
+			if (queues.size() > 0) {
+				// Test SMF connection with first available queue
+				// This will throw exception if SMF connection fails
+				PaginatedCachingBrowser testBrowser = new PaginatedCachingBrowser(broker, queues.get(0), 1);
+				// Note: PaginatedCachingBrowser manages its own connection lifecycle
+				// The connection will be closed when the browser is garbage collected
+				logger.info("SMF connection test successful.");
+			} else {
+				logger.warn("No queues found to test SMF connection. SMF connection will be tested when browsing a queue.");
+			}
+		} catch (Exception e) {
+			// Catch any exception (BrokerException, JCSMPException, etc.) from SMF connection
+			String errorMsg = "SMF (Messaging) connection failed: " + e.getMessage() + 
+				"\n\nSEMP connection is working, but SMF connection failed. " +
+				"You will be able to see the queue list, but browsing messages will not work. " +
+				"Please check your messaging credentials and network connectivity.";
+			logger.error(errorMsg, e);
+			// Show error dialog before launching UI
+			javax.swing.SwingUtilities.invokeLater(() -> {
+				JOptionPane.showMessageDialog(null, 
+					errorMsg,
+					"SMF Connection Failed",
+					JOptionPane.ERROR_MESSAGE);
+			});
+			// Don't throw exception - allow UI to launch so user can see queue list
+			// The error dialog will inform them of the issue
+		}
 		
 		this.iconCellRenderer = new IconicTableCellRenderer();
 	}
@@ -359,12 +398,19 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 			JLabel greetingLine1 = new JLabel("Service: " + broker.msgVpnName + " | SEMP User: " + broker.sempAdminUser + " | Client User: " + broker.messagingClientUsername);
 			greetingLine1.setBorder(new EmptyBorder(0, 0, 6, 0)); // Top, Left, Bottom, Right
 			greetingLine1.setFont(greetingLine0.getFont());
+			
+			// Verification label to confirm we're running v2.0.2
+			JLabel verificationLabel = new JLabel("*** v2.0.2 - SMF Error Handling Enabled ***");
+			verificationLabel.setFont(new Font(headerFontFamily, Font.BOLD, 14));
+			verificationLabel.setForeground(Color.RED);
+			verificationLabel.setBorder(new EmptyBorder(0, 0, 6, 0));
 
 			JPanel wordsPanel = new JPanel();
 			wordsPanel.setLayout(new BoxLayout(wordsPanel, BoxLayout.Y_AXIS));
 			wordsPanel.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4)); // Add some margin
 			wordsPanel.add(greetingLine0);
 			wordsPanel.add(greetingLine1);
+			wordsPanel.add(verificationLabel);
 
 			JPanel topPanel = new JPanel(new BorderLayout());
 			topPanel.add(iconLabel,BorderLayout.WEST);
@@ -480,9 +526,56 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 
 	private void onBrowse(String queueName, JFrame frame) throws SempException, JCSMPException {
 		String[] otherQueues = getListOfQueuesExceptCurrentlySelectedOne(queueName);
-		BrowserDialog d = new BrowserDialog(this.sempV2ActionClient, this.broker, queueName, frame,
-				selectedQueueMsgCount, otherQueues, thisCfg.downloadFolder, thisCfg);
-		d.run();
+		try {
+			BrowserDialog d = new BrowserDialog(this.sempV2ActionClient, this.broker, queueName, frame,
+					selectedQueueMsgCount, otherQueues, thisCfg.downloadFolder, thisCfg);
+			d.run();
+		} catch (SempException e) {
+			// Show error dialog if SMF connection fails
+			String errorMsg = "Failed to open queue browser:\n\n" + e.getMessage() + 
+				"\n\nPlease check your messaging credentials and network connectivity.";
+			JOptionPane.showMessageDialog(frame, 
+				errorMsg,
+				"SMF Connection Failed",
+				JOptionPane.ERROR_MESSAGE);
+			throw e; // Re-throw to allow caller to handle if needed
+		} catch (JCSMPException e) {
+			// Catch JCSMP exceptions directly
+			String errorMsg = "Failed to open queue browser:\n\n" +
+				"Error: " + e.getClass().getSimpleName() + "\n" +
+				"Message: " + e.getMessage() + "\n";
+			Throwable cause = e.getCause();
+			if (cause != null) {
+				errorMsg += "\nRoot Cause: " + cause.getClass().getSimpleName() + "\n";
+				errorMsg += "Root Cause Message: " + cause.getMessage() + "\n";
+			}
+			errorMsg += "\nPlease check your messaging credentials and network connectivity.";
+			JOptionPane.showMessageDialog(frame, 
+				errorMsg,
+				"SMF Connection Failed",
+				JOptionPane.ERROR_MESSAGE);
+			throw e; // Re-throw to allow caller to handle if needed
+		} catch (Exception e) {
+			// Catch any other exceptions
+			String errorMsg = "Failed to open queue browser:\n\n" +
+				"Error: " + e.getClass().getSimpleName() + "\n" +
+				"Message: " + e.getMessage() + "\n";
+			Throwable cause = e.getCause();
+			if (cause != null) {
+				errorMsg += "\nRoot Cause: " + cause.getClass().getSimpleName() + "\n";
+				errorMsg += "Root Cause Message: " + cause.getMessage() + "\n";
+			}
+			errorMsg += "\nPlease check your messaging credentials and network connectivity.";
+			JOptionPane.showMessageDialog(frame, 
+				errorMsg,
+				"Error Opening Queue Browser",
+				JOptionPane.ERROR_MESSAGE);
+			if (e instanceof SempException) {
+				throw (SempException) e;
+			} else if (e instanceof JCSMPException) {
+				throw (JCSMPException) e;
+			}
+		}
 	}
 
 	private String[] getListOfQueuesExceptCurrentlySelectedOne(String selectedQueue) {
@@ -742,6 +835,7 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 		logger.info("=================================================================");
 		logger.info("Starting Solace Queue Browser - Version: " + versionStr);
 		logger.info("=================================================================");
+		logger.info("*** VERIFICATION: This is v2.0.2 with SMF error handling ***");
 		logger.info("Configuration File: " + parser.configFileProvided);
 
 		QueueBrowserMainWindow me = new QueueBrowserMainWindow(parser.configFileProvided);

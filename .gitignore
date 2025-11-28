@@ -66,6 +66,8 @@ SolaceQueueBrowserGui/
 # exclude local files
 nram/**
 .claude/**
+.cursor/**
+.antigravity/**
 out/**
 tmp/**
 .specs/**

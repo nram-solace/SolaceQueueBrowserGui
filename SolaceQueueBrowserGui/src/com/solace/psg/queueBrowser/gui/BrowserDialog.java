@@ -138,12 +138,63 @@ public class BrowserDialog implements IDragDropInstigator {
 		this.config = config != null ? config : new Config(""); // Fallback if null
 		//spec.bodyValue = "the text you seek";
 		
-		this.initialize();
+		// Initialize browser - this will throw SempException if SMF connection fails
+		try {
+			this.initialize();
+		} catch (SempException e) {
+			// Re-throw to let caller handle and show error dialog
+			this.browser = null; // Mark as failed
+			throw e;
+		}
 	}
 
 	private void initialize() throws SempException {
-		this.browser = new PaginatedCachingBrowser(broker, this.queue, nItemsPerPage);
-		this.browser.setFilter(spec);
+		try {
+			this.browser = new PaginatedCachingBrowser(broker, this.queue, nItemsPerPage);
+			this.browser.setFilter(spec);
+			
+			// Test the connection immediately by trying to get the first page
+			// This will fail fast if SMF connection doesn't work
+			try {
+				java.util.ArrayList<com.solacesystems.jcsmp.BytesXMLMessage> testPage = this.browser.getPage(0);
+			} catch (Exception e) {
+				// Connection test failed - this means SMF is not working
+				String errorMsg = buildDetailedErrorMessage("SMF (Messaging) connection test failed", e);
+				throw new SempException(errorMsg);
+			}
+		} catch (SempException e) {
+			// Re-throw SempException as-is
+			throw e;
+		} catch (Exception e) {
+			// SMF connection failed or any other error during browser creation
+			String errorMsg = buildDetailedErrorMessage("SMF (Messaging) connection failed", e);
+			throw new SempException(errorMsg);
+		}
+	}
+	
+	/**
+	 * Build a detailed error message from an exception, including root cause
+	 */
+	private String buildDetailedErrorMessage(String baseMessage, Exception e) {
+		StringBuilder sb = new StringBuilder();
+		sb.append(baseMessage).append(":\n\n");
+		sb.append("Error: ").append(e.getClass().getSimpleName()).append("\n");
+		sb.append("Message: ").append(e.getMessage()).append("\n\n");
+		
+		// Include root cause if available
+		Throwable cause = e.getCause();
+		if (cause != null) {
+			sb.append("Root Cause: ").append(cause.getClass().getSimpleName()).append("\n");
+			sb.append("Root Cause Message: ").append(cause.getMessage()).append("\n\n");
+		}
+		
+		sb.append("Cannot browse messages. Please check:\n");
+		sb.append("- Your messaging credentials (username/password)\n");
+		sb.append("- Network connectivity to the broker\n");
+		sb.append("- Broker host and port settings\n");
+		sb.append("- VPN name configuration");
+		
+		return sb.toString();
 	}
 	
 	/**
@@ -162,9 +213,20 @@ public class BrowserDialog implements IDragDropInstigator {
 
 	@SuppressWarnings("serial")
 	void run() throws JCSMPException {
+		// Check if browser was successfully initialized
+		if (this.browser == null) {
+			String errorMsg = "SMF (Messaging) connection failed. Cannot browse messages.\n\n" +
+				"Please check your messaging credentials and network connectivity.";
+			JOptionPane.showMessageDialog(parentFrame, 
+				errorMsg,
+				"SMF Connection Failed",
+				JOptionPane.ERROR_MESSAGE);
+			return; // Don't show empty dialog
+		}
+		
 		int totalTableWidth = 1480;
 		// Create the dialog
-		String versionStr = config != null ? config.version : "v-nram-exp-cc-2.0";
+		String versionStr = config != null ? config.version : "v2.0.2";
 		dialog = new JDialog(parentFrame, "Solace Queue Browser - " + this.queue + " [" + versionStr + "]", true);
 		dialog.setSize(1600, 1200);
 		dialog.setLayout(new BorderLayout());
@@ -561,15 +623,65 @@ public class BrowserDialog implements IDragDropInstigator {
 		// Make the dialog visible
 		// dialog.setVisible(true);
 
-		SwingUtilities.invokeLater(() -> {
-			// JOptionPane.showMessageDialog(dialog, "later");
-			dialog.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
-			preFetch();
-			nCurPage = 0;
-			onNextPage(dialog, tableModel, nextPageButton);
-		});
-
+		// Show dialog first, then try to load messages
 		dialog.setVisible(true);
+		
+		// Try to load messages - if this fails, show error dialog
+		SwingUtilities.invokeLater(() -> {
+			try {
+				dialog.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+				
+				// Test connection by trying to get first page
+				nCurPage = 0;
+				Object[][] testData = null;
+				try {
+					testData = this.getMessages();
+				} catch (BrokerException e) {
+					// SMF connection failed - show error and close dialog
+					String errorMsg = buildDetailedErrorMessage("SMF (Messaging) connection failed", e);
+					// Show error dialog immediately - we're already on EDT from invokeLater
+					JOptionPane.showMessageDialog(dialog, 
+						errorMsg,
+						"SMF Connection Failed",
+						JOptionPane.ERROR_MESSAGE);
+					dialog.dispose(); // Close the empty dialog
+					dialog.setCursor(Cursor.getDefaultCursor());
+					return; // Don't continue
+				} catch (Exception e) {
+					// Any other exception
+					String errorMsg = buildDetailedErrorMessage("Failed to load messages", e);
+					// Show error dialog immediately - we're already on EDT from invokeLater
+					JOptionPane.showMessageDialog(dialog, 
+						errorMsg,
+						"Error Loading Messages",
+						JOptionPane.ERROR_MESSAGE);
+					dialog.dispose(); // Close the empty dialog
+					dialog.setCursor(Cursor.getDefaultCursor());
+					return; // Don't continue
+				}
+				
+				// If we got here, messages loaded successfully
+				display(tableModel, testData);
+				rowCount = testData != null ? testData.length : 0;
+				
+				preFetch();
+				onPageChange();
+				
+				if (rowCount > 0) {
+					autoSelectFirstRow();
+				}
+			} catch (Exception e) {
+				// Handle any other errors during initialization
+				String errorMsg = buildDetailedErrorMessage("Failed to initialize message browser", e);
+				JOptionPane.showMessageDialog(dialog, 
+					errorMsg,
+					"Error Loading Messages",
+					JOptionPane.ERROR_MESSAGE);
+				dialog.dispose(); // Close the empty dialog
+			} finally {
+				dialog.setCursor(Cursor.getDefaultCursor());
+			}
+		});
 	}
 	private String[] getPageSizes() {
 		return new String[] {"10", "20", "100", "200"};
@@ -1150,18 +1262,46 @@ public class BrowserDialog implements IDragDropInstigator {
 	}
 
 	boolean cantBrowseWarningIssuedAlready = false;
+	boolean smfConnectionErrorShown = false; // Track if we've already shown SMF error
 	private void preFetch() {
 		try {
 			semaphore.acquire();
 			browser.prefetchNextPage();
-		} catch (BrokerException | InterruptedException e) {
-			if (e.getMessage().contains("Browsing Not Supported on Partitioned Queue")) {
+		} catch (BrokerException e) {
+			if (e.getMessage() != null && e.getMessage().contains("Browsing Not Supported on Partitioned Queue")) {
 				if (! cantBrowseWarningIssuedAlready) {
 					JOptionPane.showMessageDialog(this.dialog, "That queue is a partitioned queue. Browsing is not supported on Partitioned Queues");
 					cantBrowseWarningIssuedAlready = true;
 				}
+			} else {
+				// SMF connection error - show error dialog to user
+				if (!smfConnectionErrorShown && this.dialog != null) {
+					smfConnectionErrorShown = true;
+					String errorMsg = buildDetailedErrorMessage("SMF (Messaging) connection failed during prefetch", e);
+					// Show error dialog on EDT
+					SwingUtilities.invokeLater(() -> {
+						JOptionPane.showMessageDialog(this.dialog, 
+							errorMsg,
+							"SMF Connection Failed",
+							JOptionPane.ERROR_MESSAGE);
+					});
+				}
 			}
-			e.printStackTrace();
+		} catch (InterruptedException e) {
+			// Interrupted - ignore
+		} catch (Exception e) {
+			// Catch any other exceptions
+			if (!smfConnectionErrorShown && this.dialog != null) {
+				smfConnectionErrorShown = true;
+				String errorMsg = buildDetailedErrorMessage("Unexpected error during prefetch", e);
+				// Show error dialog on EDT
+				SwingUtilities.invokeLater(() -> {
+					JOptionPane.showMessageDialog(this.dialog, 
+						errorMsg,
+						"Error",
+						JOptionPane.ERROR_MESSAGE);
+				});
+			}
 		} finally {
 			semaphore.release();
 		}
@@ -1195,7 +1335,24 @@ public class BrowserDialog implements IDragDropInstigator {
 		try {
 			dataUpdate = this.getMessages();
 		} catch (BrokerException e) {
+			// Show error dialog if SMF connection fails
+			String errorMsg = buildDetailedErrorMessage("SMF (Messaging) connection failed", e);
+			JOptionPane.showMessageDialog(dialog, 
+				errorMsg,
+				"SMF Connection Failed",
+				JOptionPane.ERROR_MESSAGE);
 			e.printStackTrace();
+			// Set empty data so dialog shows but with no messages
+			dataUpdate = new Object[0][];
+		} catch (Exception e) {
+			// Catch any other exceptions
+			String errorMsg = buildDetailedErrorMessage("Failed to load messages", e);
+			JOptionPane.showMessageDialog(dialog, 
+				errorMsg,
+				"Error Loading Messages",
+				JOptionPane.ERROR_MESSAGE);
+			e.printStackTrace();
+			dataUpdate = new Object[0][];
 		} 
 		display(tableModel, dataUpdate);
 
@@ -1224,8 +1381,25 @@ public class BrowserDialog implements IDragDropInstigator {
 			dataUpdate = this.getMessages();
 			rowCount = dataUpdate.length;
 		} catch (BrokerException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			// Show error dialog if SMF connection fails
+			String errorMsg = buildDetailedErrorMessage("SMF (Messaging) connection failed", e);
+			// Show error dialog immediately
+			JOptionPane.showMessageDialog(dialog, 
+				errorMsg,
+				"SMF Connection Failed",
+				JOptionPane.ERROR_MESSAGE);
+			// Set empty data so dialog shows but with no messages
+			dataUpdate = new Object[0][];
+			rowCount = 0;
+		} catch (Exception e) {
+			// Catch any other exceptions
+			String errorMsg = buildDetailedErrorMessage("Unexpected error loading messages", e);
+			JOptionPane.showMessageDialog(dialog, 
+				errorMsg,
+				"Error Loading Messages",
+				JOptionPane.ERROR_MESSAGE);
+			dataUpdate = new Object[0][];
+			rowCount = 0;
 		}
 		display(tableModel, dataUpdate);
 		

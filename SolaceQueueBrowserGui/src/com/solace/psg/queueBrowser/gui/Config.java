@@ -21,7 +21,7 @@ public class Config {
 	public int defaultFontSize = 14;
 	public int headerFontSize = 16;
 	public int statusFontSize = 22;
-	public String version = "v-nram-exp-cc-2.0";
+	public String version = "v2.0.2";
 
 	/* removed for V1 release
 	public List<String> blackListedQueues = null;
