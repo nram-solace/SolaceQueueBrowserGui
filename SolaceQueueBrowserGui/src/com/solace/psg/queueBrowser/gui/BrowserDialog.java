@@ -1049,10 +1049,11 @@ public class BrowserDialog implements IDragDropInstigator {
         	}
         	
         	// now update the GUI
+        	// Use the same pattern as updateDisplayAfterMultipleDeletes to ensure all rows are removed
         	boolean finished = false;
-        	while (! finished) {
+        	while (!finished) {
         		boolean deletedAnyThisRun = false;
-	    		for (int rowIter = 0; rowIter < table.getRowCount() ; rowIter++) {
+	    		for (int rowIter = 0; rowIter < table.getRowCount(); rowIter++) {
 	        		String id = (String) table.getValueAt(rowIter, nIdColumn);
 	        		
 	        		// was this message deleted?
@@ -1061,22 +1062,41 @@ public class BrowserDialog implements IDragDropInstigator {
 	        				tableModel.removeRow(rowIter);
 	                		numberOfMessagesOnTheCurrentPage--;
 	                		
-	                		// now the model is different, rows are offset, just restart and keep doing 
+	                		// now the model is different, rows are offset, restart and keep doing 
 	                		// that until none get deleted
 	                		deletedAnyThisRun = true;
 	                		break;
 	        			}
 	        		}
 	        		if (deletedAnyThisRun) {
+	        			// Found a match, restart the row iteration
 	        			if (table.getRowCount() == 0) {
 	        				finished = true;
 	        			}
 	        			break;
 	        		}
-	        		else {
-	        			finished = true;
-	        		}
 	    		}
+	    		// If we went through all rows without finding any matches, we're done
+	    		if (!deletedAnyThisRun) {
+	    			finished = true;
+	    		}
+        	}
+        	
+        	// Reset selection state and update UI after all deletions
+        	currentSelectAllState = eSelectAllState.eIndeterminant;
+        	
+        	// Auto-select the first row if there are messages remaining
+        	if (table.getRowCount() > 0) {
+        		autoSelectFirstRow();
+        	} else {
+        		clearMessageSelection();
+        	}
+        	
+        	// Update status
+        	if (ids.size() == 1) {
+        		setStatus("Message " + ids.get(0) + " was deleted.");
+        	} else {
+        		setStatus(ids.size() + " messages were deleted.");
         	}
         	
 //        	for (Integer i : all) {
