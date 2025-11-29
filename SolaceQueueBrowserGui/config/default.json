@@ -4,31 +4,31 @@
 			"name": "Local Default",
 			"sempHost": "http://localhost:8080/SEMP/v2/config",
 			"sempAdminUser": "admin",
-			"sempAdminPw": "admin",
+			"sempAdminPw": "ENC:AES256GCM:YXbyFz+rsgDpfP9TtncWgg3DTOi8:CvRymWI30YUqhk+f:5PM3ewTV+WRph83aoysQIQ==",
 			"msgVpnName": "default",
 			"messagingHost": "tcp://localhost:55333",
 			"messagingClientUsername": "default",
-			"messagingPw": "default"
+			"messagingPw": "ENC:AES256GCM:glqBL0OCe+13V/62Zx3is7vNhtQ3ug0=:9xT2vu+X0Dtnpda6:YFrGRlBzdiiBsENBd351uw=="
 		}, 
 		{
 			"name": "Local Test",
 			"sempHost": "http://localhost:8080/SEMP/v2/config",
 			"sempAdminUser": "admin",
-			"sempAdminPw": "admin",
+			"sempAdminPw": "ENC:AES256GCM:YXbyFz+rsgDpfP9TtncWgg3DTOi8:CvRymWI30YUqhk+f:5PM3ewTV+WRph83aoysQIQ==",
 			"msgVpnName": "TestVPN",
 			"messagingHost": "tcp://localhost:55333",
 			"messagingClientUsername": "default",
-			"messagingPw": "default"
+			"messagingPw": "ENC:AES256GCM:glqBL0OCe+13V/62Zx3is7vNhtQ3ug0=:9xT2vu+X0Dtnpda6:YFrGRlBzdiiBsENBd351uw=="
 		},
 		{
             "name": "NVIDIA AEM POC",
             "sempHost": "https://mr-connection-2bygqpfpkzd.messaging.solace.cloud:943/SEMP/v2/config",
             "sempAdminUser": "nvidia-eis-service-admin",
-            "sempAdminPw": "43aibk798hha8jik13lntrhffe",
+            "sempAdminPw": "ENC:AES256GCM:qJxQOO7qVGXbiAVNxUeAWRBoD85vud17DI5Lij5UBSuvUnM34RUraRgo:mC15enrBo+uYpUbJ:M3Hu4DSZzf5sHt0nnUVEQw==",
             "msgVpnName": "nvidia-eis-service",
             "messagingHost": "tcps://mr-connection-2bygqpfpkzd.messaging.solace.cloud:55443",
             "messagingClientUsername": "nram",
-            "messagingPw" : "nram12#"
+            "messagingPw" : "ENC:AES256GCM:uwWhICa1or36A+qzn/oFXUdXxsExI4E=:8qbrZ1iFBdzKnJAM:PM2z08t6uiNUeRNY1pGiew=="
         }
 	],
 	"downloadFolder": "./downloads",

@@ -28,6 +28,7 @@ import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
+import javax.swing.JPasswordField;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
@@ -108,13 +109,25 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 	    }
 	}
 	
+	private String masterPasswordFromCommandLine = null;
+	
 	public QueueBrowserMainWindow(String configFile) throws BrokerException {
 		this.configFile = configFile;
+		this.initialize();
+	}
+	
+	public QueueBrowserMainWindow(String configFile, String masterPasswordFromCommandLine) throws BrokerException {
+		this.configFile = configFile;
+		this.masterPasswordFromCommandLine = masterPasswordFromCommandLine;
 		this.initialize();
 	}
 
 	private void initialize() throws BrokerException {
 		thisCfg = new Config(this.configFile);
+		
+		// Check if config has encrypted passwords and prompt for master password if needed
+		handleMasterPassword();
+		
 		thisCfg.load();
 		broker = thisCfg.broker;
 		
@@ -122,6 +135,69 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 		initializeBrokerConnections();
 		
 		this.iconCellRenderer = new IconicTableCellRenderer();
+	}
+	
+	/**
+	 * Handles master password: checks if encrypted passwords exist and prompts user if needed.
+	 * Master password can be provided via command line or GUI prompt.
+	 */
+	private void handleMasterPassword() throws BrokerException {
+		try {
+			// Check if config file has encrypted passwords
+			if (thisCfg.hasEncryptedPasswords()) {
+				char[] masterPw = null;
+				
+				// Try to get master password from command line first (if available)
+				if (masterPasswordFromCommandLine != null && !masterPasswordFromCommandLine.isEmpty()) {
+					masterPw = masterPasswordFromCommandLine.toCharArray();
+				} else {
+					// Prompt user for master password via GUI
+					masterPw = promptForMasterPassword();
+					if (masterPw == null || masterPw.length == 0) {
+						throw new BrokerException("Master password is required to decrypt encrypted passwords. Application will exit.");
+					}
+				}
+				
+				// Set master password in config
+				thisCfg.setMasterPassword(masterPw);
+				
+				// Clear the array from memory after use
+				java.util.Arrays.fill(masterPw, '\0');
+			}
+		} catch (BrokerException e) {
+			throw e;
+		} catch (Exception e) {
+			throw new BrokerException("Error checking for encrypted passwords: " + e.getMessage());
+		}
+	}
+	
+	/**
+	 * Prompts user for master password via a secure password dialog.
+	 * @return Master password as char array, or null if cancelled
+	 */
+	private char[] promptForMasterPassword() {
+		JPasswordField passwordField = new JPasswordField(20);
+		passwordField.setEchoChar('*');
+		
+		Object[] message = {
+			"Encrypted passwords detected in configuration file.",
+			"Please enter the master password to decrypt them:",
+			passwordField
+		};
+		
+		int option = JOptionPane.showConfirmDialog(
+			null,
+			message,
+			"Master Password Required",
+			JOptionPane.OK_CANCEL_OPTION,
+			JOptionPane.QUESTION_MESSAGE
+		);
+		
+		if (option == JOptionPane.OK_OPTION) {
+			return passwordField.getPassword();
+		}
+		
+		return null;
 	}
 	
 	private void initializeBrokerConnections() throws BrokerException {
@@ -1388,12 +1464,20 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 		CommandLineParser parser = new CommandLineParser();
 		parser.parseArgs(args);
 		
-		// Load config to get version
+		// Load config to get version (without master password for now)
 		Config tempCfg = new Config(parser.configFileProvided);
 		try {
+			// Check if encrypted passwords exist before loading
+			boolean hasEncrypted = tempCfg.hasEncryptedPasswords();
+			if (hasEncrypted && parser.masterPasswordProvided != null) {
+				tempCfg.setMasterPassword(parser.masterPasswordProvided);
+			}
 			tempCfg.load();
 		} catch (BrokerException e) {
-			logger.error("Failed to load config for version info: " + e.getMessage());
+			// If it's a master password error, we'll handle it in QueueBrowserMainWindow
+			if (!e.getMessage().contains("master password")) {
+				logger.error("Failed to load config for version info: " + e.getMessage());
+			}
 		}
 		String versionStr = tempCfg.version;
 		
@@ -1407,7 +1491,7 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 		logger.info("*** VERIFICATION: This is v2.0.2 with SMF error handling ***");
 		logger.info("Configuration File: " + parser.configFileProvided);
 
-		QueueBrowserMainWindow me = new QueueBrowserMainWindow(parser.configFileProvided);
+		QueueBrowserMainWindow me = new QueueBrowserMainWindow(parser.configFileProvided, parser.masterPasswordProvided);
 		me.run();
 	}
 }

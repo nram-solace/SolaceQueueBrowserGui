@@ -10,6 +10,7 @@ import org.json.JSONObject;
 import com.solace.psg.brokers.Broker;
 import com.solace.psg.brokers.BrokerException;
 import com.solace.psg.util.FileUtils;
+import com.solace.psg.util.PasswordEncryption;
 
 public class Config {
 	
@@ -36,9 +37,93 @@ public class Config {
 		List<String> destinations = new ArrayList<String>();
 	}
 	
+	private char[] masterPassword = null; // Master password for decrypting encrypted passwords
+	
 	public Config(String file) {
 		this.configFile = file;
 	}
+	
+	/**
+	 * Set the master password for decrypting encrypted passwords.
+	 * @param masterPassword The master password as a char array (for security)
+	 */
+	public void setMasterPassword(char[] masterPassword) {
+		// Clear old password from memory if exists
+		if (this.masterPassword != null) {
+			java.util.Arrays.fill(this.masterPassword, '\0');
+		}
+		// Copy the array to avoid issues if caller clears the original
+		if (masterPassword != null) {
+			this.masterPassword = new char[masterPassword.length];
+			System.arraycopy(masterPassword, 0, this.masterPassword, 0, masterPassword.length);
+		} else {
+			this.masterPassword = null;
+		}
+	}
+	
+	/**
+	 * Set the master password for decrypting encrypted passwords.
+	 * @param masterPassword The master password as a String
+	 */
+	public void setMasterPassword(String masterPassword) {
+		setMasterPassword(masterPassword != null ? masterPassword.toCharArray() : null);
+	}
+	
+	/**
+	 * Check if any passwords in the config file are encrypted.
+	 * This method loads the config file and checks for encrypted passwords without decrypting them.
+	 * @return true if any encrypted passwords are found, false otherwise
+	 */
+	public boolean hasEncryptedPasswords() throws BrokerException {
+		String fileContent = null;
+		try {
+			fileContent = FileUtils.loadFile(this.configFile);
+		} catch (IOException e) {
+			throw new BrokerException(e);
+		}
+		JSONObject doc = new JSONObject(fileContent);
+		
+		// Check eventBrokers array
+		if (doc.has("eventBrokers")) {
+			JSONArray eventBrokersArray = doc.getJSONArray("eventBrokers");
+			for (int i = 0; i < eventBrokersArray.length(); i++) {
+				JSONObject eventBroker = eventBrokersArray.getJSONObject(i);
+				if (hasEncryptedPasswordInBroker(eventBroker)) {
+					return true;
+				}
+			}
+		}
+		
+		// Check single eventBroker (backward compatibility)
+		if (doc.has("eventBroker")) {
+			JSONObject eventBroker = doc.getJSONObject("eventBroker");
+			if (hasEncryptedPasswordInBroker(eventBroker)) {
+				return true;
+			}
+		}
+		
+		return false;
+	}
+	
+	/**
+	 * Check if a broker JSON object contains encrypted passwords.
+	 */
+	private boolean hasEncryptedPasswordInBroker(JSONObject eventBroker) {
+		if (eventBroker.has("sempAdminPw")) {
+			String pw = eventBroker.getString("sempAdminPw");
+			if (PasswordEncryption.isEncrypted(pw)) {
+				return true;
+			}
+		}
+		if (eventBroker.has("messagingPw")) {
+			String pw = eventBroker.getString("messagingPw");
+			if (PasswordEncryption.isEncrypted(pw)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	
 	public void load() throws BrokerException  {
 	    String fileContent = null;
 		try {
@@ -147,12 +232,49 @@ public class Config {
 		b.sempHost = eventBroker.getString("sempHost");
 		b.msgVpnName = eventBroker.getString("msgVpnName");
 		b.sempAdminUser = eventBroker.getString("sempAdminUser");
-		b.sempAdminPw = eventBroker.getString("sempAdminPw");
+		
+		// Handle sempAdminPw - decrypt if encrypted
+		String sempAdminPw = eventBroker.getString("sempAdminPw");
+		b.sempAdminPw = decryptPasswordIfNeeded(sempAdminPw, "sempAdminPw");
+		
 		b.name = eventBroker.getString("name");
 		b.messagingHost = eventBroker.getString("messagingHost");
 		b.messagingClientUsername = eventBroker.getString("messagingClientUsername");
-		b.messagingPw = eventBroker.getString("messagingPw");
+		
+		// Handle messagingPw - decrypt if encrypted
+		String messagingPw = eventBroker.getString("messagingPw");
+		b.messagingPw = decryptPasswordIfNeeded(messagingPw, "messagingPw");
+		
 		return b;
+	}
+	
+	/**
+	 * Decrypts a password if it's encrypted, otherwise returns it as-is.
+	 * @param password The password string (may be encrypted or plain text)
+	 * @param fieldName The name of the field (for error messages)
+	 * @return The decrypted or plain text password
+	 * @throws BrokerException if password is encrypted but master password is not set or decryption fails
+	 */
+	private String decryptPasswordIfNeeded(String password, String fieldName) throws BrokerException {
+		if (PasswordEncryption.isEncrypted(password)) {
+			if (masterPassword == null || masterPassword.length == 0) {
+				throw new BrokerException(
+					"Encrypted password found for field '" + fieldName + "' but master password is not set. " +
+					"Please provide the master password using --master-password option or via GUI prompt."
+				);
+			}
+			try {
+				String masterPwStr = new String(masterPassword);
+				return PasswordEncryption.decrypt(password, masterPwStr);
+			} catch (Exception e) {
+				throw new BrokerException(
+					"Failed to decrypt password for field '" + fieldName + "': " + e.getMessage() + 
+					". The master password may be incorrect."
+				);
+			}
+		}
+		// Not encrypted, return as-is (backward compatibility)
+		return password;
 	}
 	
 	/**
