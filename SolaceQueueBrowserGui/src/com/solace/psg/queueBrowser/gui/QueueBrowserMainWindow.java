@@ -308,8 +308,8 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 
 	private void run() {
 		// Create the frame
-		String versionStr = thisCfg != null ? thisCfg.version : "v-nram-exp-cc-2.0";
-		frame = new JFrame("SolQ!BAM - Solace Queue Browser and Manger - " + versionStr);
+		String versionStr = thisCfg != null ? thisCfg.version : "v2.1.3";
+		frame = new JFrame("SQMB+ : Solace Queue Message Browser & More - " + versionStr);
 			frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 			frame.setSize(1200, 800);
 			frame.setLayout(new BorderLayout());

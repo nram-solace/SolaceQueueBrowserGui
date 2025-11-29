@@ -25,7 +25,7 @@ public class Config {
 	public int defaultFontSize = 14;
 	public int headerFontSize = 16;
 	public int statusFontSize = 22;
-	public String version = "v2.1.1";
+	public String version = "v2.1.3";
 
 	/* removed for V1 release
 	public List<String> blackListedQueues = null;
