@@ -33,7 +33,7 @@
 	],
 	"downloadFolder": "./downloads",
 	"ui": {
-		"version": "2.1.1",
+		"version": "2.1.2",
 		"fontFamily": null,
 		"defaultFontSize": 14,
 		"headerFontSize": 16,
