@@ -1,0 +1,11 @@
+{
+	"version": "v2.2.0",
+	"downloadFolder": "./downloads",
+	"ui": {
+		"fontFamily": null,
+		"defaultFontSize": 14,
+		"headerFontSize": 16,
+		"statusFontSize": 22
+	}
+}
+

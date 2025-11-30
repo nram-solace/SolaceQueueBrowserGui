@@ -125,18 +125,27 @@ public class Config {
 	}
 	
 	public void load() throws BrokerException  {
-	    String fileContent = null;
+		// First, load system.json if it exists
+		loadSystemConfig();
+		
+		// Then load user config file
+		String fileContent = null;
 		try {
 			fileContent = FileUtils.loadFile(this.configFile);
 		} catch (IOException e) {
 			throw new BrokerException(e);
 		}
 		JSONObject doc = new JSONObject(fileContent);
+		
+		// Load system properties from user config (allows override, though not recommended)
+		if (doc.has("version")) {
+			version = doc.getString("version");
+		}
 		if (doc.has("downloadFolder")) {
 			downloadFolder = doc.getString("downloadFolder");
 		}
 		
-		// Load UI configuration if present
+		// Load UI configuration if present (allows override, though not recommended)
 		if (doc.has("ui")) {
 			JSONObject uiConfig = doc.getJSONObject("ui");
 			if (uiConfig.has("fontFamily") && !uiConfig.isNull("fontFamily")) {
@@ -151,6 +160,7 @@ public class Config {
 			if (uiConfig.has("statusFontSize")) {
 				statusFontSize = uiConfig.getInt("statusFontSize");
 			}
+			// Backward compatibility: also check for version in ui object
 			if (uiConfig.has("version")) {
 				version = uiConfig.getString("version");
 			}
@@ -180,6 +190,48 @@ public class Config {
 			selectedBrokerIndex = 0;
 		} else {
 			throw new BrokerException("Configuration must contain either 'eventBroker' or 'eventBrokers'");
+		}
+	}
+	
+	/**
+	 * Load system configuration from config/system.json
+	 * This file contains system/internal properties like download folder and UI settings
+	 */
+	private void loadSystemConfig() throws BrokerException {
+		String systemConfigFile = "config/system.json";
+		try {
+			String fileContent = FileUtils.loadFile(systemConfigFile);
+			JSONObject systemDoc = new JSONObject(fileContent);
+			
+			// Load version from top level
+			if (systemDoc.has("version")) {
+				version = systemDoc.getString("version");
+			}
+			
+			// Load download folder
+			if (systemDoc.has("downloadFolder")) {
+				downloadFolder = systemDoc.getString("downloadFolder");
+			}
+			
+			// Load UI configuration
+			if (systemDoc.has("ui")) {
+				JSONObject uiConfig = systemDoc.getJSONObject("ui");
+				if (uiConfig.has("fontFamily") && !uiConfig.isNull("fontFamily")) {
+					fontFamily = uiConfig.getString("fontFamily");
+				}
+				if (uiConfig.has("defaultFontSize")) {
+					defaultFontSize = uiConfig.getInt("defaultFontSize");
+				}
+				if (uiConfig.has("headerFontSize")) {
+					headerFontSize = uiConfig.getInt("headerFontSize");
+				}
+				if (uiConfig.has("statusFontSize")) {
+					statusFontSize = uiConfig.getInt("statusFontSize");
+				}
+			}
+		} catch (IOException e) {
+			// System config file is optional - if it doesn't exist, use defaults
+			// This allows backward compatibility with existing configs
 		}
         
         /* This code removed for V1 release

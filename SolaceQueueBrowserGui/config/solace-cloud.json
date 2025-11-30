@@ -8,6 +8,5 @@
 		"messagingHost": "tcps://mr-connection-REPLACEWITHYOURURL.messaging.solace.cloud:55443",
 		"messagingClientUsername": "REPLACE-WITH-YOUR-CLIENT-USERNAME",
 		"messagingPw": "REPLACE-WITH-YOUR-CLIENT-PASSWORD"
-	},
-	"downloadFolder": "./downloads"
+	}
 }

@@ -30,13 +30,5 @@
             "messagingClientUsername": "nram",
             "messagingPw" : "ENC:AES256GCM:uwWhICa1or36A+qzn/oFXUdXxsExI4E=:8qbrZ1iFBdzKnJAM:PM2z08t6uiNUeRNY1pGiew=="
         }
-	],
-	"downloadFolder": "./downloads",
-	"ui": {
-		"version": "v2.2.0",
-		"fontFamily": null,
-		"defaultFontSize": 14,
-		"headerFontSize": 16,
-		"statusFontSize": 22
-	}
+	]
 }

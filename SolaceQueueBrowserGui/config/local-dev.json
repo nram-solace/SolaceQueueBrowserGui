@@ -8,6 +8,5 @@
 		"messagingHost": "tcp://localhost:55555",
 		"messagingClientUsername": "admin",
 		"messagingPw": "admin"
-	},
-	"downloadFolder": "./downloads"
+	}
 }
