@@ -526,22 +526,6 @@ The Next button is automatically disabled when:
 - ZIP files must follow expected format and structure
 - Target queue must exist and be accessible
 
-### Drag and Drop
-
-**Purpose**: Move messages between queues using drag and drop.
-
-**Steps**:
-1. Select message(s) in source queue browser
-2. Drag selected messages to target queue name in main window queue table
-3. Drop to initiate move operation
-
-**Screenshot Placeholder: Drag and drop operation**
-
-**Behavior**:
-- Only move operations supported (not copy)
-- Visual feedback during drag operation
-- Confirmation dialog shown after drop
-
 ---
 
 ## Filtering and Sorting
@@ -742,10 +726,6 @@ To verify an encrypted password:
 
 #### SEMP Connection Failures
 
-**Symptoms**:
-- Queue list does not load
-- Error dialog shows SEMP connection failure
-
 **Solutions**:
 - Verify SEMP host URL is correct and accessible
 - Check SEMP admin credentials
@@ -753,7 +733,6 @@ To verify an encrypted password:
 - Check firewall rules for SEMP port (typically 8080 for HTTP, 943 for HTTPS)
 
 **Screenshot Placeholder: SEMP connection error**
-
 #### SMF (Messaging) Connection Failures
 
 **Symptoms**:
@@ -767,8 +746,6 @@ To verify an encrypted password:
 - Check network connectivity to messaging endpoint
 - Verify firewall rules for messaging port (typically 55555 for TCP, 55443 for TCPS)
 
-**Screenshot Placeholder: SMF connection error**
-
 ### Password Decryption Errors
 
 **Symptoms**:
@@ -779,8 +756,6 @@ To verify an encrypted password:
 - Ensure master password matches the one used for encryption
 - Check for special characters that may need quoting in command line
 - Use GUI prompt instead of command-line password if issues persist
-
-**Screenshot Placeholder: Password decryption error**
 
 ### Message Loading Issues
 
@@ -807,17 +782,6 @@ To verify an encrypted password:
 - Set `fontFamily` to `null` to use system defaults
 - Check log files for font-related errors
 
-### Broker Switching Issues
-
-**Symptoms**:
-- Broker switch fails
-- Queue list does not update
-
-**Solutions**:
-- Verify new broker configuration is correct
-- Check network connectivity to new broker
-- Review error dialog for specific failure reason
-- Check application logs for detailed error information
 
 ### Performance Issues
 
