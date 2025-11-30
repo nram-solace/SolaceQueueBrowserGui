@@ -22,6 +22,8 @@ import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Set;
 import java.util.concurrent.Semaphore;
@@ -1203,20 +1205,29 @@ public class BrowserDialog implements IDragDropInstigator {
 				}
 			}
 			
+			// Get broker hostname and sanitized VPN/queue names for status message
+			String brokerHostname = this.broker.fqdn();
+			if (brokerHostname == null || brokerHostname.isEmpty()) {
+				brokerHostname = this.broker.name;
+			}
+			String sanitizedVpnName = this.broker.msgVpnName.replaceAll("/", "_").replaceAll(" ", "_");
+			String sanitizedQueueName = this.queue.replaceAll("/", "_").replaceAll(" ", "_");
+			String downloadPath = "./downloads/" + brokerHostname + "/" + sanitizedVpnName + "/" + sanitizedQueueName;
+			
 			// Show confirmation dialog
 			String message;
 			if (failedIds.isEmpty()) {
 				message = successfulIds.size() + " message" + (successfulIds.size() == 1 ? "" : "s") + 
-					" successfully downloaded to:\n" + this.downloadFolder;
+					" successfully downloaded to:\n" + downloadPath;
 			} else {
 				message = successfulIds.size() + " message" + (successfulIds.size() == 1 ? "" : "s") + 
-					" successfully downloaded to:\n" + this.downloadFolder + "\n\n" +
+					" successfully downloaded to:\n" + downloadPath + "\n\n" +
 					failedIds.size() + " message" + (failedIds.size() == 1 ? "" : "s") + " failed.";
 			}
 			JOptionPane.showMessageDialog(dialog, message, 
 				"Download Complete", JOptionPane.INFORMATION_MESSAGE);
 			
-			setStatus(ids.size() + " messages were downloaded to " + this.downloadFolder);
+			setStatus(ids.size() + " messages were downloaded to " + downloadPath);
 			
 			// Unselect the downloaded messages
 			unselectMessages(ids);
@@ -1249,7 +1260,21 @@ public class BrowserDialog implements IDragDropInstigator {
 		String[][] headers = getMessageHeadersData(message);
 		String[][] userProps = getMessageUserPropsData(message);
 		
-		String folder = this.downloadFolder;
+		// Get broker hostname (use fqdn() if available, otherwise use name)
+		String brokerHostname = this.broker.fqdn();
+		if (brokerHostname == null || brokerHostname.isEmpty()) {
+			brokerHostname = this.broker.name;
+		}
+		
+		// Sanitize VPN name: replace "/" and spaces with "_"
+		String sanitizedVpnName = this.broker.msgVpnName.replaceAll("/", "_").replaceAll(" ", "_");
+		
+		// Sanitize queue name: replace "/" and spaces with "_"
+		String sanitizedQueueName = this.queue.replaceAll("/", "_").replaceAll(" ", "_");
+		
+		// Build folder path: ./downloads/hostname/vpn-name/queue-name/
+		String baseFolder = "./downloads";
+		String folder = baseFolder + "/" + brokerHostname + "/" + sanitizedVpnName + "/" + sanitizedQueueName;
 		makeDirIfRequired(folder);
 		
 		String payloadFile = folder + "/payload.txt"; 
@@ -1263,12 +1288,13 @@ public class BrowserDialog implements IDragDropInstigator {
 		String userPropsFile = folder + "/userProps.txt"; 
 		writeStringToFile(userPropsFile, payload);
 
-		//StringBuilder sb = new StringBuilder();
-		String context = this.broker.name + "-" + this.broker.msgVpnName;
+		// Format timestamp as YYYYMMDDHHSS
 		Instant when = Instant.now();
-		long lWhen = when.toEpochMilli();
+		DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMddHHmmss")
+			.withZone(ZoneId.systemDefault());
+		String timestamp = formatter.format(when);
 		
-		String zipFileName = folder + "/" + context + "-" + "msg-" + id + "-" + lWhen + ".zip";
+		String zipFileName = folder + "/msg-" + id + "-" + timestamp + ".zip";
 
         FileOutputStream fos = new FileOutputStream(zipFileName);
         ZipOutputStream zipOut = new ZipOutputStream(fos);
