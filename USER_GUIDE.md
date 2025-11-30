@@ -80,13 +80,15 @@ java -jar target/SolaceQueueBrowserGui-1.0.0-jar-with-dependencies.jar -c config
 
 The application uses a two-file configuration system:
 1. **System Configuration** (`config/system.json`) - Contains system and internal properties
-2. **User Configuration** - Contains only broker connection information
+2. **User Configuration** - Contains user configs such as Solace broker access info.
 
-The system configuration is loaded first, followed by the user configuration file. This separation reduces redundancy and makes it easier to maintain system settings.
+The system configuration is loaded first, followed by the user configuration file. 
 
 #### System Configuration File (`config/system.json`)
 
-The system configuration file contains system and internal properties:
+**REQUIRED**: The system configuration file is mandatory. The application will exit with an error if this file doesn't exist or fails to load/parse.
+
+**WARNING**: DONOT modify this file unless you are sure what you are doing. 
 
 ```json
 {
@@ -101,20 +103,18 @@ The system configuration file contains system and internal properties:
 }
 ```
 
-**System Configuration Fields:**
+**Error Handling:**
+- If `config/system.json` doesn't exist, the application exits with: "Failed to read system configuration file 'config/system.json': [error]. The system.json file is required."
+- If the file contains invalid JSON, the application exits with: "Failed to parse system configuration file 'config/system.json': [error]. The system.json file must be valid JSON."
+- If processing the file fails, the application exits with: "Failed to process system configuration file 'config/system.json': [error]"
 
-- `version`: Application version string (displayed in window titles) - **top level**
-- `downloadFolder`: Default folder for downloaded messages (relative or absolute path)
-- `ui.fontFamily`: Font family name (null uses system default)
-- `ui.defaultFontSize`: Default font size for UI elements
-- `ui.headerFontSize`: Font size for headers
-- `ui.statusFontSize`: Font size for status messages
 
-**Note:** The system configuration file is optional. If it doesn't exist, default values are used. This ensures backward compatibility with existing configurations.
 
 #### User Configuration File Format
 
-User configuration files contain **only** broker connection information:
+User configuration files contain **only** broker connection information. The `eventBrokers` array format is required - the legacy single `eventBroker` object format is no longer supported.
+
+**REQUIRED FORMAT**: User configuration files must use the `eventBrokers` array format:
 
 ```json
 {
@@ -133,6 +133,18 @@ User configuration files contain **only** broker connection information:
 }
 ```
 
+**Error Handling:**
+- If the user config file doesn't exist or can't be read, the application exits with: "Failed to read user configuration file: [error]"
+- If the file contains invalid JSON, the application exits with: "Failed to parse user configuration file: [error]"
+- If the file doesn't contain `eventBrokers` array, the application exits with: "User configuration must contain 'eventBrokers' array"
+- If processing the configuration fails, the application exits with: "Failed to process user configuration: [error]"
+- If processing `eventBrokers` fails, the application exits with: "Failed to process eventBrokers configuration: [error]"
+
+**Legacy Format No Longer Supported:**
+- The old `eventBroker` (singular) object format is no longer supported
+- Users must migrate to the `eventBrokers` array format
+- Single broker configurations should wrap the broker object in an array: `"eventBrokers": [{...}]`
+
 **Broker Configuration (`eventBrokers` array):**
 
 - `name`: Display name for the broker (shown in broker selector dropdown)
@@ -144,48 +156,9 @@ User configuration files contain **only** broker connection information:
 - `messagingClientUsername`: Messaging client username
 - `messagingPw`: Messaging client password (supports encrypted format)
 
-**Note:** User configuration files can still include system properties (like `downloadFolder` or `ui`) for backward compatibility, but this is not recommended. System properties should be maintained in `config/system.json`.
-
-#### Backward Compatibility
-
-The application supports the legacy single-broker format:
-
-```json
-{
-  "eventBroker": {
-    "name": "Broker Name",
-    ...
-  }
-}
-```
-
-When using the legacy format, the broker selector dropdown is not displayed.
 
 **Screenshot Placeholder: Configuration file example with multiple brokers**
 
-### Obtaining Broker Credentials
-
-#### Solace Cloud Brokers
-
-**SEMP Admin Credentials:**
-1. Log into Solace Cloud console
-2. Select your broker
-3. Click "Manage"
-4. Open "SEMP - REST API" section
-5. Copy the SEMP endpoint URL and credentials
-
-**Messaging Client Credentials:**
-1. Log into Solace Cloud console
-2. Select your broker
-3. Click "Connect"
-4. Open "Solace Messaging" section
-5. Copy the messaging endpoint URL and credentials
-
-#### On-Premise Brokers
-
-- SEMP Host: Typically `http://<broker-host>:8080/SEMP/v2/config`
-- Messaging Host: Typically `tcp://<broker-host>:55555` or `tcps://<broker-host>:55443`
-- Credentials: Provided by your Solace administrator
 
 ---
 
@@ -833,7 +806,7 @@ To verify an encrypted password:
 }
 ```
 
-**Note:** The system configuration file is optional. If it doesn't exist, default values are used.
+**Note:** The system configuration file is **required**. The application will exit with an error if `config/system.json` doesn't exist or fails to load/parse.
 
 #### User Configuration Schema
 
@@ -855,6 +828,8 @@ To verify an encrypted password:
 ```
 
 **Note:** User configuration files should contain only broker information. System properties (`downloadFolder`, `ui`, `version`) can still be included for backward compatibility, but are not recommended. System properties should be maintained in `config/system.json`.
+
+**Important:** The `eventBrokers` array format is required. The legacy `eventBroker` (singular) object format is no longer supported. If your configuration uses the old format, you must migrate to the array format.
 
 ### Supported URL Formats
 
