@@ -40,6 +40,37 @@ public class SempClient {
 	private static Gson gson = new Gson();
 	private boolean verifyHostnameOnSllHandshake = true;
 
+	/**
+	 * URL-encodes a queue name for use in URL paths.
+	 * This is necessary because queue names can contain special characters like "/" and spaces
+	 * which need to be encoded (e.g., "/" becomes "%2F", space becomes "%20").
+	 * 
+	 * Note: URLEncoder.encode() is designed for form data encoding (spaces become "+"),
+	 * but for URL path segments, spaces must be encoded as "%20", not "+".
+	 * 
+	 * @param queueName The queue name to encode
+	 * @return URL-encoded queue name suitable for URL paths
+	 */
+	private static String encodeQueueNameForUrl(String queueName) {
+		if (queueName == null) {
+			return null;
+		}
+		try {
+			// URLEncoder.encode() encodes spaces as "+" (form encoding), but URL paths need "%20"
+			String encoded = URLEncoder.encode(queueName, "UTF-8");
+			// Replace "+" with "%20" for proper URL path encoding
+			encoded = encoded.replace("+", "%20");
+			logger.debug("Encoded queue name: '" + queueName + "' -> '" + encoded + "'");
+			return encoded;
+		} catch (java.io.UnsupportedEncodingException e) {
+			// UTF-8 should always be supported, but fallback to default encoding if needed
+			logger.warn("UTF-8 encoding not supported, using default encoding", e);
+			String encoded = URLEncoder.encode(queueName);
+			encoded = encoded.replace("+", "%20");
+			return encoded;
+		}
+	}
+
 	public static SempClient SempClientFactory(eApi whichApi, String url, String user, String pw) throws SempException {
 		String urlToApi = null;
 		// fix whatever string they have provided
@@ -130,6 +161,7 @@ public class SempClient {
 //	}
 
 	public void copy(String vpn, String fromQ, String toQ, String replicationGroupMsgId) throws SempException {
+		logger.info("copy called - VPN: " + vpn + ", From Queue: '" + fromQ + "', To Queue: '" + toQ + "'");
 		if (this.fullUrl.contains(eApi.eAction.toString()) == false) {
 			throw new SempException("The copy method is not supported on non-action instances of this class.");
 		}
@@ -142,16 +174,21 @@ public class SempClient {
 //		return this.putVpnObjectFullUrl(thisUrl, jsonBody);
 //
 
-		String url = "/msgVpns/" + vpn + "/queues/" + toQ + "/copyMsgFromQueue";
+		String encodedToQ = encodeQueueNameForUrl(toQ);
+		logger.info("copy - Encoded destination queue name: '" + toQ + "' -> '" + encodedToQ + "'");
+		String url = "/msgVpns/" + vpn + "/queues/" + encodedToQ + "/copyMsgFromQueue";
 		putVpnObject(url, map);
 	}
 
 	public void delete(String resource) throws SempException {
 		String urlToUse = this.fullUrl + resource;
-		logger.info("Deleteing SEMP entity at " + urlToUse);
+		logger.info("SEMP DELETE Request - Resource Path: " + resource);
+		logger.info("SEMP DELETE Request - Full URL: " + urlToUse);
 		try {
 			HttpClient.delete(urlToUse, user, pw);
+			logger.info("SEMP DELETE Request Successful - Path: " + resource);
 		} catch (IOException e) {
+			logger.error("SEMP DELETE Request Failed - Path: " + resource + ", Full URL: " + urlToUse, e);
 			throw new SempException(e);
 		}
 	}
@@ -194,7 +231,9 @@ public class SempClient {
 				urlToUse = urlToUse.replace("config", "monitor");
 			}
 
-			logger.debug("trying the broker on Url " + urlToUse);
+			logger.info("SEMP Request - Full URL: " + urlToUse);
+			logger.info("SEMP Request - Resource Path: " + resource);
+			logger.info("SEMP Request - API Endpoint: " + apiEndpoint);
 			logger.debug("Using admin creds" + this.user + "/" + this.pw);
 
 			try {
@@ -204,6 +243,7 @@ public class SempClient {
 							"The http implementation is currently hard coded to bypass SSL hostname validation. The verifyHostnameOnSllHandshake setting is not being respected.");
 				}
 				results = HttpClient.fetch(urlToUse, user, pw);
+				logger.info("SEMP Request Successful - Path: " + resource + ", Response length: " + (results != null ? results.length() : 0) + " chars");
 				logger.debug("http GET returns:" + results);
 				finished = true;
 			} catch (Exception e) {
@@ -214,10 +254,11 @@ public class SempClient {
 				} else {
 					strErr = e.getMessage();
 				}
+				logger.error("SEMP Request Failed - Path: " + resource + ", Full URL: " + urlToUse + ", Error: " + strErr, e);
 				if (strErr.contains("Collection does not support paging")) {
 					paginate = ePaginationBehavior.eNone;
 				} else {
-					logger.error("failure", e);
+					logger.error("SEMP Request Error Details - Path: " + resource, e);
 					finished = true;
 					if (inner != null) {
 						throwSempError(e, strErr);
@@ -316,8 +357,19 @@ public class SempClient {
 
 	public String getObjectDetails(String vpn, String objectName, String identityColumn, String identityValue)
 			throws SempException {
-		@SuppressWarnings("deprecation")
-		String primaryKey = URLEncoder.encode(identityValue);
+		String primaryKey;
+		try {
+			// URLEncoder.encode() encodes spaces as "+" (form encoding), but URL paths need "%20"
+			primaryKey = URLEncoder.encode(identityValue, "UTF-8");
+			// Replace "+" with "%20" for proper URL path encoding
+			primaryKey = primaryKey.replace("+", "%20");
+			logger.debug("Encoded object identity value: '" + identityValue + "' -> '" + primaryKey + "'");
+		} catch (java.io.UnsupportedEncodingException e) {
+			// UTF-8 should always be supported, but fallback to default encoding if needed
+			logger.warn("UTF-8 encoding not supported, using default encoding", e);
+			primaryKey = URLEncoder.encode(identityValue);
+			primaryKey = primaryKey.replace("+", "%20");
+		}
 
 		String resource = "monitor/msgVpns/" + vpn + "/" + objectName + "/" + primaryKey;
 		String responseText = "";
@@ -553,9 +605,12 @@ public class SempClient {
 	}
 
 	public String getQueueDetails(String vpn, String queueName) throws SempException {
+		logger.info("getQueueDetails called - VPN: " + vpn + ", Queue Name: '" + queueName + "'");
 		String resource = "config/msgVpns/{msgVpnName}/queues/{queueName}";
 		resource = resource.replace("{msgVpnName}", vpn);
-		resource = resource.replace("{queueName}", queueName);
+		String encodedQueueName = encodeQueueNameForUrl(queueName);
+		resource = resource.replace("{queueName}", encodedQueueName);
+		logger.info("getQueueDetails - Encoded queue name: '" + queueName + "' -> '" + encodedQueueName + "'");
 
 		String responseText = "";
 		responseText = this.getSempV2(resource, ePaginationBehavior.eNone);
@@ -596,10 +651,13 @@ public class SempClient {
 		String responseText = "";
 		try {
 			String url = this.fullUrl + resource;
-			logger.info("posting Semp request on " + url);
-			logger.debug("body=" + body);
+			logger.info("SEMP POST Request - Resource Path: " + resource);
+			logger.info("SEMP POST Request - Full URL: " + url);
+			logger.debug("SEMP POST Request Body: " + body);
 			responseText = HttpClient.postWithBody(url, this.user, this.pw, body, HttpClient.JSON);
+			logger.info("SEMP POST Request Successful - Path: " + resource + ", Response length: " + (responseText != null ? responseText.length() : 0) + " chars");
 		} catch (IOException e) {
+			logger.error("SEMP POST Request Failed - Path: " + resource, e);
 			parseException(e);
 		}
 		return responseText;
@@ -608,10 +666,12 @@ public class SempClient {
 	private String postVpnObjectFullUrl(String fullUrl, String body) throws SempException {
 		String responseText = "";
 		try {
-			logger.info("posting Semp request on " + fullUrl);
-			logger.debug("body=" + body);
+			logger.info("SEMP POST Request - Full URL: " + fullUrl);
+			logger.debug("SEMP POST Request Body: " + body);
 			responseText = HttpClient.postWithBody(fullUrl, this.user, this.pw, body, HttpClient.JSON);
+			logger.info("SEMP POST Request Successful - Full URL: " + fullUrl + ", Response length: " + (responseText != null ? responseText.length() : 0) + " chars");
 		} catch (IOException e) {
+			logger.error("SEMP POST Request Failed - Full URL: " + fullUrl, e);
 			parseException(e);
 		}
 		return responseText;
@@ -620,22 +680,26 @@ public class SempClient {
 	public String putVpnObject(String resource, Map<String, Object> bodyMap) throws SempException {
 		String jsonBody = toJson(bodyMap);
 		String thisUrl = this.fullUrl + resource;
+		logger.info("SEMP PUT Request - Resource Path: " + resource);
 		return this.putVpnObjectFullUrl(thisUrl, jsonBody);
 	}
 
 	public String patchVpnObject(String resource, Map<String, Object> bodyMap) throws SempException {
 		String jsonBody = toJson(bodyMap);
 		String thisUrl = this.fullUrl + resource;
+		logger.info("SEMP PATCH Request - Resource Path: " + resource);
 		return this.patchVpnObjectFullUrl(thisUrl, jsonBody);
 	}
 
 	private String patchVpnObjectFullUrl(String fullUrl, String body) throws SempException {
 		String responseText = "";
 		try {
-			logger.info("patching Semp request on " + fullUrl);
-			logger.debug("body=" + body);
+			logger.info("SEMP PATCH Request - Full URL: " + fullUrl);
+			logger.debug("SEMP PATCH Request Body: " + body);
 			responseText = HttpClient.patchWithBody(fullUrl, this.user, this.pw, body, HttpClient.JSON);
+			logger.info("SEMP PATCH Request Successful - Full URL: " + fullUrl + ", Response length: " + (responseText != null ? responseText.length() : 0) + " chars");
 		} catch (IOException e) {
+			logger.error("SEMP PATCH Request Failed - Full URL: " + fullUrl, e);
 			parseException(e);
 		}
 		return responseText;
@@ -644,10 +708,12 @@ public class SempClient {
 	private String putVpnObjectFullUrl(String fullUrl, String body) throws SempException {
 		String responseText = "";
 		try {
-			logger.info("patching Semp request on " + fullUrl);
-			logger.debug("body=" + body);
+			logger.info("SEMP PUT Request - Full URL: " + fullUrl);
+			logger.debug("SEMP PUT Request Body: " + body);
 			responseText = HttpClient.putWithBody(fullUrl, this.user, this.pw, body, HttpClient.JSON);
+			logger.info("SEMP PUT Request Successful - Full URL: " + fullUrl + ", Response length: " + (responseText != null ? responseText.length() : 0) + " chars");
 		} catch (IOException e) {
+			logger.error("SEMP PUT Request Failed - Full URL: " + fullUrl, e);
 			parseException(e);
 		}
 		return responseText;
@@ -769,9 +835,12 @@ public class SempClient {
 	}
 
 	public boolean getQueueBoolean(String vpn, String queueName, String field) throws SempException {
+		logger.info("getQueueBoolean called - VPN: " + vpn + ", Queue Name: '" + queueName + "', Field: " + field);
 		String resource = "monitor/msgVpns/{msgVpnName}/queues/{queueName}";
 		resource = resource.replace("{msgVpnName}", vpn);
-		resource = resource.replace("{queueName}", queueName);
+		String encodedQueueName = encodeQueueNameForUrl(queueName);
+		resource = resource.replace("{queueName}", encodedQueueName);
+		logger.info("getQueueBoolean - Encoded queue name: '" + queueName + "' -> '" + encodedQueueName + "'");
 
 		boolean enabled = false;
 		String responseText = this.getSempV2(resource, ePaginationBehavior.eNone);
@@ -830,7 +899,10 @@ public class SempClient {
 	}	
 
 	public QueueInfo getQueueInfo(String msgVpnName, String queueName) throws SempException {
-		String resource = "/msgVpns/" + msgVpnName + "/queues/" + queueName;
+		logger.info("getQueueInfo called - VPN: " + msgVpnName + ", Queue Name: '" + queueName + "'");
+		String encodedQueueName = encodeQueueNameForUrl(queueName);
+		logger.info("getQueueInfo - Encoded queue name: '" + queueName + "' -> '" + encodedQueueName + "'");
+		String resource = "/msgVpns/" + msgVpnName + "/queues/" + encodedQueueName;
 		String result = getSempV2(resource, ePaginationBehavior.eNone);
 		
 		// Suppressed: System.out.println(result); // Long JSON output suppressed for cleaner UI

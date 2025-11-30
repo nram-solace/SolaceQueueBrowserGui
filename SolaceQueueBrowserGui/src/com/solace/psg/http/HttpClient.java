@@ -103,11 +103,12 @@ public class HttpClient {
 	// Broker servicing calls ---------------------------------------------------------------------------
 	//---------------------------------------------------------------------------------------------------
 	public static String fetch(String url, String username, String password) throws IOException {
+		logger.info("HttpClient.fetch() called - URL: " + url);
 		return get(url, username, password, defaultWaitInMs);
 	}
 	public static String get(String url, String username, String password, int nTimeoutMilliSeconds)
 			throws IOException {
-
+		logger.info("HttpClient.get() called - URL: " + url + ", Timeout: " + nTimeoutMilliSeconds + "ms");
 		OkHttpClient httpClient = unauthenticatedClientFactory();
 		return doGet(httpClient, url, username, password);
 	}
@@ -231,11 +232,20 @@ public class HttpClient {
         logger.debug("OkHttp Connection Pool: " + pool.connectionCount() + " total connections, " + pool.idleConnectionCount() + " idle connections.");
 
 		Request request = builder.build();
+		String requestPath = request.url().toString();
+		logger.info("SEMP Request Path: " + requestPath);
+		
 		OkHttpClient httpClient = unauthenticatedClientFactory();
 		Response response = httpClient.newCall(request).execute();
+		
+		int statusCode = response.code();
+		String statusMessage = response.message();
+		logger.info("SEMP Response Status: " + statusCode + " " + statusMessage + " for path: " + requestPath);
+		
 		if (!response.isSuccessful()) {
 			String result = response.body().string();
 			response.close();
+			logger.error("SEMP Request Failed - Status: " + statusCode + ", Path: " + requestPath + ", Response: " + result);
 			if (result.length() > 0) {
 				Exception e = new Exception(result);
 				throw new IOException(e);
@@ -295,9 +305,12 @@ public class HttpClient {
 		return execute(builder);
 	}
 	private static String doGet(OkHttpClient httpClient, String anyURL, String username, String password) throws IOException {
+		logger.info("HttpClient.doGet() called - URL: " + anyURL);
 		logger.info("GET from " + anyURL);
 		Builder builder = builderFactory(anyURL, username, password);
 		builder.get();
-		return execute(builder);
+		String result = execute(builder);
+		logger.info("HttpClient.doGet() completed - URL: " + anyURL + ", Response length: " + (result != null ? result.length() : 0) + " chars");
+		return result;
 	}
 }
