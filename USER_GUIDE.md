@@ -459,14 +459,18 @@ The Next button is automatically disabled when:
 **Screenshot Placeholder: Download operation**
 
 **File Format**:
-- ZIP file named: `{BrokerName}-{QueueName}-msg-{MessageID}-{Timestamp}.zip`
-- Each message saved as individual file within ZIP
+- ZIP file path: `./downloads/{hostname}/{vpn-name}/{queue-name}/msg-{MessageID}-{YYYYMMDDHHSS}.zip`
+- Directory structure organized by broker hostname, VPN name, and queue name
+- Queue names and VPN names sanitized (replaces "/" and spaces with "_")
+- Timestamp format: `YYYYMMDDHHSS` (e.g., `20240115143025`)
+- Each message saved as individual ZIP file containing payload, headers, and user properties
 - Original message format preserved
 
 **Behavior**:
 - Messages remain in source queue (not removed)
 - Selected messages are automatically unselected after download
-- Download folder configured in config file (`downloadFolder` field)
+- Directory structure created automatically if it doesn't exist
+- Download path shown in confirmation dialog
 
 ### Drag and Drop
 
