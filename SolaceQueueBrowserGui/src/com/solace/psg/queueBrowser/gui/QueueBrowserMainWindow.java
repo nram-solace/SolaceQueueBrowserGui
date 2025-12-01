@@ -99,6 +99,9 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 	private JComboBox<String> brokerComboBox;
 	private JLabel greetingLine0;
 	private JLabel greetingLine1;
+	private boolean isInitializingBrokerComboBox = false; // Flag to prevent action listener from firing during initialization
+	private boolean isUIInitialized = false; // Flag to track if UI initialization is complete
+	private boolean hasInitialBrokerSelectionBeenSet = false; // Flag to track if initial broker selection has been set
 	
 	// Filter and sort UI components
 	private JTextField searchField;
@@ -148,6 +151,10 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 	}
 
 	private void initialize() throws BrokerException {
+		logger.info("========================================");
+		logger.info("QueueBrowserMainWindow.initialize() STARTING");
+		logger.info("========================================");
+		
 		thisCfg = new Config(this.configFile);
 		
 		// Check if config has encrypted passwords and prompt for master password if needed
@@ -156,10 +163,19 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 		thisCfg.load();
 		broker = thisCfg.broker;
 		
-		// Initialize connections for the selected broker
-		initializeBrokerConnections();
+		// Initialize empty queue lists - connection will happen when broker is selected
+		allQueues = new ArrayList<QueueInfo>();
+		filteredQueues = new ArrayList<QueueInfo>();
+		
+		// Don't connect automatically - wait for user to select a broker from dropdown
+		// initializeBrokerConnections(); // Removed - connection happens on broker selection
+		logger.info("initialize() - NOT calling initializeBrokerConnections() - connection will happen on broker selection");
 		
 		this.iconCellRenderer = new IconicTableCellRenderer(thisCfg);
+		
+		logger.info("========================================");
+		logger.info("QueueBrowserMainWindow.initialize() COMPLETE");
+		logger.info("========================================");
 	}
 	
 	/**
@@ -225,7 +241,30 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 		return null;
 	}
 	
-	private void initializeBrokerConnections() throws BrokerException {
+	/**
+	 * Initialize broker connections. This method handles errors gracefully and does not throw exceptions.
+	 * Connection errors are displayed to the user via error dialogs, allowing them to select another broker.
+	 * @return true if connection was successful, false otherwise
+	 */
+	private boolean initializeBrokerConnections() {
+		logger.info("========================================");
+		logger.info("initializeBrokerConnections() CALLED");
+		logger.info("  - isUIInitialized: " + isUIInitialized);
+		logger.info("  - isInitializingBrokerComboBox: " + isInitializingBrokerComboBox);
+		logger.info("  - broker: " + (broker != null ? broker.name : "null"));
+		logger.info("  - Thread: " + Thread.currentThread().getName());
+		logger.info("  - Stack trace:");
+		StackTraceElement[] stack = Thread.currentThread().getStackTrace();
+		for (int i = 0; i < Math.min(10, stack.length); i++) {
+			logger.info("    " + stack[i].toString());
+		}
+		logger.info("========================================");
+		
+		if (broker == null) {
+			logger.error("Cannot initialize connections - broker is null");
+			return false;
+		}
+		
 		// Test SEMP connections upfront
 		try {
 			sempV2ConfigClient = SempClient.SempClientFactory(eApi.eConfig, broker.sempHost, broker.sempAdminUser,
@@ -245,9 +284,32 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 			// Note: UI components may not be initialized yet, so we'll apply filters after UI is created
 			logger.info("SEMP connection successful. Found " + allQueues.size() + " queues.");
 		} catch (SempException e) {
-			String errorMsg = "SEMP connection failed: " + e.getMessage();
+			String errorMsg = "SEMP connection failed: " + e.getMessage() + 
+				"\n\nPlease check your broker host, credentials, and network connectivity.\n" +
+				"You can try selecting another broker from the dropdown.";
 			logger.error(errorMsg, e);
-			throw new BrokerException(errorMsg);
+			// Show error dialog - don't exit, allow user to select another broker
+			if (frame != null) {
+				JOptionPane.showMessageDialog(frame, 
+					errorMsg,
+					"Connection Failed",
+					JOptionPane.ERROR_MESSAGE);
+			} else {
+				// Frame not yet created, use invokeLater
+				javax.swing.SwingUtilities.invokeLater(() -> {
+					JOptionPane.showMessageDialog(null, 
+						errorMsg,
+						"Connection Failed",
+						JOptionPane.ERROR_MESSAGE);
+				});
+			}
+			// Clear connections on failure
+			sempV2ConfigClient = null;
+			sempV2ActionClient = null;
+			sempV2MonitorClient = null;
+			allQueues = new ArrayList<QueueInfo>();
+			filteredQueues = new ArrayList<QueueInfo>();
+			return false;
 		}
 		
 		// Test SMF connection upfront by creating a test browser instance
@@ -269,16 +331,24 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 				"You will be able to see the queue list, but browsing messages will not work. " +
 				"Please check your messaging credentials and network connectivity.";
 			logger.error(errorMsg, e);
-			// Show error dialog before launching UI
-			javax.swing.SwingUtilities.invokeLater(() -> {
-				JOptionPane.showMessageDialog(null, 
+			// Show error dialog - don't exit, allow user to see queue list
+			if (frame != null) {
+				JOptionPane.showMessageDialog(frame, 
 					errorMsg,
 					"SMF Connection Failed",
 					JOptionPane.ERROR_MESSAGE);
-			});
-			// Don't throw exception - allow UI to launch so user can see queue list
-			// The error dialog will inform them of the issue
+			} else {
+				javax.swing.SwingUtilities.invokeLater(() -> {
+					JOptionPane.showMessageDialog(null, 
+						errorMsg,
+						"SMF Connection Failed",
+						JOptionPane.ERROR_MESSAGE);
+				});
+			}
+			// Don't return false - SEMP connection is working, so we can still show queue list
 		}
+		
+		return true;
 	}
 	
 	/**
@@ -597,9 +667,9 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 			// Add icon
 			topPanel.add(iconLabel);
 			
-			// Create broker selection combo box if multiple brokers are available
+			// Create broker selection combo box - always show it, even if only one broker
 			int labelFontSize = thisCfg != null ? thisCfg.labelFontSize : 16;
-			if (thisCfg.getBrokers().size() > 1) {
+			if (thisCfg.getBrokers().size() > 0) {
 				JLabel brokerLabel = new JLabel("Event Broker:");
 				brokerLabel.setFont(new Font(headerFontFamily, Font.PLAIN, labelFontSize));
 				topPanel.add(brokerLabel);
@@ -610,11 +680,40 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 					brokerNames[i] = thisCfg.getBrokers().get(i).name;
 				}
 				brokerComboBox = new JComboBox<String>(brokerNames);
-				brokerComboBox.setSelectedIndex(thisCfg.getSelectedBrokerIndex());
 				brokerComboBox.setFont(new Font(headerFontFamily, Font.PLAIN, labelFontSize));
-				brokerComboBox.addActionListener(new ActionListener() {
+				
+				// Create action listener to trigger connection when broker is selected
+				ActionListener brokerSelectionListener = new ActionListener() {
 					@Override
 					public void actionPerformed(ActionEvent e) {
+						logger.info("========================================");
+						logger.info("BROKER COMBO BOX ACTION LISTENER FIRED");
+						logger.info("  - isInitializingBrokerComboBox: " + isInitializingBrokerComboBox);
+						logger.info("  - isUIInitialized: " + isUIInitialized);
+						logger.info("  - sempV2MonitorClient: " + (sempV2MonitorClient != null ? "not null" : "null"));
+						logger.info("  - Thread: " + Thread.currentThread().getName());
+						logger.info("========================================");
+						
+						// Don't trigger connection during initial setup
+						if (isInitializingBrokerComboBox) {
+							logger.info("Ignoring broker combo box action during initialization");
+							return;
+						}
+						
+						// Don't trigger connection if UI is not yet initialized
+						if (!isUIInitialized) {
+							logger.info("Ignoring broker combo box action - UI not yet initialized");
+							return;
+						}
+						
+						// Additional check: if no connection has been established yet and initial selection hasn't been set,
+						// this is likely the initial setup, so ignore it
+						// After initial setup is complete, allow user to connect to any broker including the default one
+						if (sempV2MonitorClient == null && !hasInitialBrokerSelectionBeenSet) {
+							logger.info("Ignoring broker combo box action - this is initial setup, not user selection");
+							return;
+						}
+						
 						System.out.println(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
 						System.out.println("BROKER COMBO BOX ACTION EVENT TRIGGERED");
 						System.out.println(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
@@ -635,6 +734,9 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 						logger.info("Previous broker index: " + previousIndex);
 						logger.info("Previous broker name: " + (previousBroker != null ? previousBroker.name : "null"));
 						
+						// Try to switch/connect to the selected broker
+						// This will handle connection errors gracefully without exiting
+						// Wrap in try-catch to ensure exceptions don't propagate and cause app exit
 						try {
 							logger.info("Calling switchBroker('" + selectedBrokerName + "')...");
 							switchBroker(selectedBrokerName);
@@ -650,10 +752,7 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 								logger.error("Exception cause: " + ex.getCause().getMessage());
 							}
 							logger.error("Broker switch failed: " + ex.getMessage(), ex);
-							JOptionPane.showMessageDialog(frame, 
-								"Failed to switch broker: " + ex.getMessage(),
-								"Broker Switch Failed",
-								JOptionPane.ERROR_MESSAGE);
+							// Error dialog is already shown in switchBroker() or initializeBrokerConnections()
 							
 							// Restore previous broker state
 							logger.info("Attempting to restore previous broker state...");
@@ -709,12 +808,30 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 							logger.info("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
 						}
 					}
-				});
+				};
+				
+				// Set the selected index BEFORE adding the listener to prevent initial trigger
+				// This ensures the combo box is set to the correct initial value without firing the listener
+				// Use a flag to ensure we don't process any events during this setup
+				isInitializingBrokerComboBox = true;
+				try {
+					brokerComboBox.setSelectedIndex(thisCfg.getSelectedBrokerIndex());
+				} finally {
+					isInitializingBrokerComboBox = false;
+					// Mark that initial broker selection has been set
+					// After this, user selections (including selecting the default broker) will trigger connection
+					hasInitialBrokerSelectionBeenSet = true;
+				}
+				
+				// Now add the listener - future changes will trigger connection
+				// But only after UI is fully initialized (checked in the listener itself)
+				brokerComboBox.addActionListener(brokerSelectionListener);
+				
 				topPanel.add(brokerComboBox);
 			}
 			
 			// Create single line connection info: Broker: host | Service: VPN | SEMP User: user | Client User: user
-			// Ensure broker is not null and has valid data
+			// Ensure broker is not null - use selected broker from config (connection will happen on selection)
 			System.out.println("========================================");
 			System.out.println("CREATING INITIAL BROKER INFO LABEL");
 			System.out.println("========================================");
@@ -723,11 +840,12 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 			System.out.println("thisCfg.getSelectedBrokerIndex(): " + thisCfg.getSelectedBrokerIndex());
 			
 			if (broker == null) {
-				System.out.println("ERROR: Broker is null during UI initialization!");
-				logger.error("Broker is null during UI initialization!");
+				System.out.println("Broker is null during UI initialization - will connect when user selects from dropdown");
+				logger.info("Broker is null during UI initialization - connection will happen when user selects from dropdown");
 				if (thisCfg.brokers.size() > 0) {
-					broker = thisCfg.brokers.get(0); // Fallback to first broker
-					System.out.println("Using fallback broker: " + broker.name);
+					// Use the selected broker from config, but don't connect yet
+					broker = thisCfg.broker;
+					System.out.println("Using selected broker from config: " + (broker != null ? broker.name : "null"));
 				} else {
 					System.out.println("ERROR: No brokers available!");
 					logger.error("No brokers available!");
@@ -820,8 +938,12 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 
 			frame.setVisible(true);
 			
+			// Mark UI as initialized - now broker selection will trigger connections
+			isUIInitialized = true;
+			
 			// Apply initial filters and sorting after UI is fully visible
 			// This ensures User category filter is applied by default
+			// Note: If no broker is connected, queues will be empty
 			SwingUtilities.invokeLater(() -> {
 				if (categoryUser != null && categoryUser.isSelected()) {
 					applyFiltersAndSorting();
@@ -971,6 +1093,13 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 	}
 	
 	private void switchBroker(String brokerName) throws BrokerException {
+		// Safety check: don't allow broker switching if UI is not initialized
+		// This prevents accidental calls during initialization
+		if (!isUIInitialized) {
+			logger.warn("switchBroker() called before UI initialization complete - ignoring");
+			return;
+		}
+		
 		System.out.println("========================================");
 		System.out.println("SWITCHING BROKER: " + brokerName);
 		System.out.println("========================================");
@@ -981,6 +1110,11 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 		logger.info("========================================");
 		logger.info("Current broker before switch: " + (broker != null ? broker.name : "null"));
 		logger.info("Current selectedBrokerIndex before switch: " + thisCfg.getSelectedBrokerIndex());
+		
+		if (frame == null) {
+			logger.warn("switchBroker() called before frame is created - ignoring");
+			return;
+		}
 		
 		frame.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
 		
@@ -1051,10 +1185,12 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 			}
 		}
 		
-		try {
-			// Reinitialize connections for the new broker
-			logger.info("Starting broker connection initialization...");
-			initializeBrokerConnections();
+		// Reinitialize connections for the new broker
+		// This method handles errors gracefully and does not throw exceptions
+		logger.info("Starting broker connection initialization...");
+		boolean connectionSuccess = initializeBrokerConnections();
+		
+		if (connectionSuccess) {
 			logger.info("Broker connection initialization completed successfully");
 			
 			// Refresh queue list
@@ -1082,64 +1218,22 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 			logger.info("========================================");
 			logger.info("BROKER SWITCH COMPLETED SUCCESSFULLY: " + brokerName);
 			logger.info("========================================");
-			
-		} catch (BrokerException e) {
+		} else {
 			logger.error("========================================");
-			logger.error("BROKER SWITCH FAILED (BrokerException): " + brokerName);
-			logger.error("Error: " + e.getMessage());
-			if (e.getCause() != null) {
-				logger.error("Cause: " + e.getCause().getMessage());
-			}
-			logger.error("Current broker after failure: " + (broker != null ? broker.name : "null"));
-			logger.error("greetingLine0 is null: " + (greetingLine0 == null));
-			if (greetingLine0 != null) {
-				logger.error("greetingLine0 text: " + greetingLine0.getText());
-				logger.error("greetingLine0 visible: " + greetingLine0.isVisible());
-			}
+			logger.error("BROKER CONNECTION FAILED: " + brokerName);
+			logger.error("Connection failed - error dialog shown to user");
 			logger.error("========================================");
-			frame.setCursor(Cursor.getDefaultCursor());
-			// Label should already be updated, but ensure it's visible
-			if (greetingLine0 != null) {
-				greetingLine0.setVisible(true);
-			}
-			throw e;
-		} catch (Exception e) {
-			logger.error("========================================");
-			logger.error("BROKER SWITCH FAILED (Exception): " + brokerName);
-			logger.error("Error: " + e.getMessage());
-			logger.error("Exception type: " + e.getClass().getName());
-			if (e.getCause() != null) {
-				logger.error("Cause: " + e.getCause().getMessage());
-				logger.error("Cause type: " + e.getCause().getClass().getName());
-			}
-			logger.error("Current broker after failure: " + (broker != null ? broker.name : "null"));
-			logger.error("greetingLine0 is null: " + (greetingLine0 == null));
-			if (greetingLine0 != null) {
-				logger.error("greetingLine0 text: " + greetingLine0.getText());
-				logger.error("greetingLine0 visible: " + greetingLine0.isVisible());
-			}
-			logger.error("========================================");
-			frame.setCursor(Cursor.getDefaultCursor());
-			// Label should already be updated, but ensure it's visible
-			if (greetingLine0 != null) {
-				greetingLine0.setVisible(true);
-			}
-			String errorMsg = "Failed to switch broker: " + e.getMessage();
-			if (e.getCause() != null) {
-				errorMsg += " - Cause: " + e.getCause().getMessage();
-			}
-			throw new BrokerException(errorMsg);
-		} finally {
-			logger.info("switchBroker() finally block - ensuring label is visible");
-			frame.setCursor(Cursor.getDefaultCursor());
-			// Ensure label is visible in finally block
-			if (greetingLine0 != null) {
-				greetingLine0.setVisible(true);
-				logger.info("greetingLine0 text in finally: " + greetingLine0.getText());
-				logger.info("greetingLine0 visible in finally: " + greetingLine0.isVisible());
-			} else {
-				logger.error("greetingLine0 is null in finally block!");
-			}
+			// Error dialog already shown in initializeBrokerConnections()
+			// Throw BrokerException so caller can restore previous broker state
+			throw new BrokerException("Failed to connect to broker: " + brokerName);
+		}
+		
+		frame.setCursor(Cursor.getDefaultCursor());
+		// Ensure label is visible
+		if (greetingLine0 != null) {
+			greetingLine0.setVisible(true);
+			logger.info("greetingLine0 text: " + greetingLine0.getText());
+			logger.info("greetingLine0 visible: " + greetingLine0.isVisible());
 		}
 	}
 	

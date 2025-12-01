@@ -597,9 +597,54 @@ public class SempClient {
 			
 			logger.info("Retrieved " + queueInfos.size() + " queues with properties");
 		} catch (SempException e) {
-			throw new SempException(e);
+			// Preserve the original SempException (which may contain connection errors)
+			// Check if it's a connection error and provide a clearer message
+			String errorMsg = e.getMessage();
+			if (errorMsg != null && (
+				errorMsg.contains("Connection refused") ||
+				errorMsg.contains("Failed to connect") ||
+				errorMsg.contains("ConnectException") ||
+				errorMsg.contains("UnknownHostException") ||
+				errorMsg.contains("timeout") ||
+				errorMsg.contains("TimeoutException")
+			)) {
+				// This is a connection error, not a parsing error - create new exception with clearer message
+				// The original exception is preserved in the cause chain via BrokerException
+				throw new SempException("Connection failed: " + errorMsg);
+			}
+			// Otherwise, re-throw the original exception
+			throw e;
+		} catch (org.json.JSONException e) {
+			// This is a JSON parsing error - check if it's due to empty/invalid response from connection failure
+			String errorMsg = e.getMessage();
+			if (errorMsg != null && errorMsg.contains("A JSONObject text must begin with '{'")) {
+				// This usually means we got an empty response or HTML error page instead of JSON
+				// Likely due to connection failure - provide a clearer error message
+				// Wrap the original exception to preserve the cause
+				throw new SempException("Connection failed: Unable to reach broker. The server may be unreachable or the connection was refused.");
+			}
+			// Otherwise, it's a real JSON parsing error
+			throw new SempException("Failed to parse queue info: " + errorMsg + " - " + e.getClass().getSimpleName());
 		} catch (Exception e) {
-			throw new SempException("Failed to parse queue info: " + e.getMessage() + " - " + e.getClass().getSimpleName());
+			// Check if it's a connection-related exception
+			String errorMsg = e.getMessage();
+			String exceptionType = e.getClass().getSimpleName();
+			if (errorMsg != null && (
+				errorMsg.contains("Connection refused") ||
+				errorMsg.contains("Failed to connect") ||
+				errorMsg.contains("ConnectException") ||
+				errorMsg.contains("UnknownHostException") ||
+				errorMsg.contains("timeout") ||
+				errorMsg.contains("TimeoutException") ||
+				exceptionType.contains("ConnectException") ||
+				exceptionType.contains("UnknownHostException") ||
+				exceptionType.contains("TimeoutException")
+			)) {
+				// This is a connection error - wrap the exception to preserve the cause
+				throw new SempException("Connection failed: " + errorMsg);
+			}
+			// Otherwise, it's some other error - wrap the exception to preserve the cause
+			throw new SempException("Failed to retrieve queue info: " + errorMsg + " - " + exceptionType);
 		}
 		return queueInfos;
 	}
