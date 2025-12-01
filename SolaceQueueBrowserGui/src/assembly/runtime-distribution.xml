@@ -55,6 +55,8 @@
             <includes>
                 <include>run.sh</include>
                 <include>crypt-util.sh</include>
+                <include>run.bat</include>
+                <include>crypt-util.bat</include>
             </includes>
             <fileMode>0755</fileMode>
         </fileSet>
