@@ -266,14 +266,50 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 		}
 		
 		// Test SEMP connections upfront
+		System.out.println("========================================");
+		System.out.println("TESTING SEMP CONNECTION");
+		System.out.println("========================================");
+		System.out.println("  - sempHost: " + broker.sempHost);
+		System.out.println("  - msgVpnName: " + broker.msgVpnName);
+		System.out.println("  - sempAdminUser: " + broker.sempAdminUser);
+		logger.info("========================================");
+		logger.info("Testing SEMP connection...");
+		logger.info("  - sempHost: " + broker.sempHost);
+		logger.info("  - msgVpnName: " + broker.msgVpnName);
+		logger.info("  - sempAdminUser: " + broker.sempAdminUser);
+		logger.info("========================================");
+		
 		try {
+			System.out.println("Creating SEMP clients...");
+			logger.info("Creating SEMP clients...");
 			sempV2ConfigClient = SempClient.SempClientFactory(eApi.eConfig, broker.sempHost, broker.sempAdminUser,
 					broker.sempAdminPw);
 			sempV2ActionClient = SempClient.SempClientFactory(eApi.eAction, broker.sempHost, broker.sempAdminUser,
 					broker.sempAdminPw);
 			sempV2MonitorClient = SempClient.SempClientFactory(eApi.eMonitor, broker.sempHost, broker.sempAdminUser,
 					broker.sempAdminPw);
+			logger.info("SEMP clients created successfully");
+			System.out.println("SEMP clients created successfully");
+			
+			// Validate VPN exists before attempting to fetch queues
+			// This will throw SempException if VPN does not exist
+			System.out.println("Validating VPN exists: " + broker.msgVpnName);
+			logger.info("Validating VPN exists: " + broker.msgVpnName);
+			try {
+				sempV2MonitorClient.validateVpnExists(broker.msgVpnName);
+				logger.info("VPN validation successful");
+				System.out.println("VPN validation successful");
+			} catch (SempException e) {
+				// VPN validation failed - re-throw with clearer message
+				logger.error("VPN validation failed: " + e.getMessage());
+				System.out.println("VPN validation failed: " + e.getMessage());
+				throw e;
+			}
+			
 			// Fetch queue info with properties for filtering and sorting
+			// This will throw SempException if VPN name is incorrect or connection fails
+			System.out.println("Fetching queue info for VPN: " + broker.msgVpnName);
+			logger.info("Fetching queue info for VPN: " + broker.msgVpnName);
 			allQueues = sempV2MonitorClient.getAllQueueInfo(broker.msgVpnName);
 			if (allQueues == null) {
 				allQueues = new ArrayList<QueueInfo>();
@@ -283,23 +319,94 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 			// Apply default filters (User category) and sorting
 			// Note: UI components may not be initialized yet, so we'll apply filters after UI is created
 			logger.info("SEMP connection successful. Found " + allQueues.size() + " queues.");
+			System.out.println("SEMP connection successful. Found " + allQueues.size() + " queues.");
 		} catch (SempException e) {
+			System.out.println("========================================");
+			System.out.println("SEMP EXCEPTION CAUGHT");
+			System.out.println("========================================");
+			System.out.println("Error: " + e.getMessage());
+			if (e.getCause() != null) {
+				System.out.println("Cause: " + e.getCause().getMessage());
+			}
+			System.out.println("========================================");
+			
+			logger.error("========================================");
+			logger.error("SEMP CONNECTION FAILED");
+			logger.error("========================================");
+			logger.error("Error: " + e.getMessage());
+			logger.error("Error class: " + e.getClass().getName());
+			if (e.getCause() != null) {
+				logger.error("Cause: " + e.getCause().getMessage());
+				logger.error("Cause class: " + e.getCause().getClass().getName());
+			}
+			logger.error("Full exception stack trace:", e);
+			logger.error("========================================");
+			
 			String errorMsg = "SEMP connection failed: " + e.getMessage() + 
-				"\n\nPlease check your broker host, credentials, and network connectivity.\n" +
+				"\n\nPlease check your broker host, VPN name, credentials, and network connectivity.\n" +
 				"You can try selecting another broker from the dropdown.";
-			logger.error(errorMsg, e);
+			
 			// Show error dialog - don't exit, allow user to select another broker
 			if (frame != null) {
 				JOptionPane.showMessageDialog(frame, 
 					errorMsg,
-					"Connection Failed",
+					"SEMP Connection Failed",
 					JOptionPane.ERROR_MESSAGE);
 			} else {
 				// Frame not yet created, use invokeLater
 				javax.swing.SwingUtilities.invokeLater(() -> {
 					JOptionPane.showMessageDialog(null, 
 						errorMsg,
-						"Connection Failed",
+						"SEMP Connection Failed",
+						JOptionPane.ERROR_MESSAGE);
+				});
+			}
+			// Clear connections on failure
+			sempV2ConfigClient = null;
+			sempV2ActionClient = null;
+			sempV2MonitorClient = null;
+			allQueues = new ArrayList<QueueInfo>();
+			filteredQueues = new ArrayList<QueueInfo>();
+			return false;
+		} catch (Exception e) {
+			// Catch any other unexpected exceptions
+			System.out.println("========================================");
+			System.out.println("UNEXPECTED EXCEPTION DURING SEMP CONNECTION");
+			System.out.println("========================================");
+			System.out.println("Error: " + e.getMessage());
+			System.out.println("Error class: " + e.getClass().getName());
+			if (e.getCause() != null) {
+				System.out.println("Cause: " + e.getCause().getMessage());
+			}
+			System.out.println("========================================");
+			
+			logger.error("========================================");
+			logger.error("UNEXPECTED EXCEPTION DURING SEMP CONNECTION");
+			logger.error("========================================");
+			logger.error("Error: " + e.getMessage());
+			logger.error("Error class: " + e.getClass().getName());
+			if (e.getCause() != null) {
+				logger.error("Cause: " + e.getCause().getMessage());
+				logger.error("Cause class: " + e.getCause().getClass().getName());
+			}
+			logger.error("Full exception stack trace:", e);
+			logger.error("========================================");
+			
+			String errorMsg = "SEMP connection failed with unexpected error: " + e.getMessage() + 
+				"\n\nPlease check your broker host, VPN name, credentials, and network connectivity.\n" +
+				"You can try selecting another broker from the dropdown.";
+			
+			// Show error dialog
+			if (frame != null) {
+				JOptionPane.showMessageDialog(frame, 
+					errorMsg,
+					"SEMP Connection Failed",
+					JOptionPane.ERROR_MESSAGE);
+			} else {
+				javax.swing.SwingUtilities.invokeLater(() -> {
+					JOptionPane.showMessageDialog(null, 
+						errorMsg,
+						"SEMP Connection Failed",
 						JOptionPane.ERROR_MESSAGE);
 				});
 			}

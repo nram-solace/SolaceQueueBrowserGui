@@ -234,6 +234,8 @@ public class SempClient {
 			logger.info("SEMP Request - Full URL: " + urlToUse);
 			logger.info("SEMP Request - Resource Path: " + resource);
 			logger.info("SEMP Request - API Endpoint: " + apiEndpoint);
+			System.out.println("SEMP Request - Full URL: " + urlToUse);
+			System.out.println("SEMP Request - Resource Path: " + resource);
 			logger.debug("Using admin creds" + this.user + "/" + this.pw);
 
 			try {
@@ -244,7 +246,50 @@ public class SempClient {
 				}
 				results = HttpClient.fetch(urlToUse, user, pw);
 				logger.info("SEMP Request Successful - Path: " + resource + ", Response length: " + (results != null ? results.length() : 0) + " chars");
-				logger.debug("http GET returns:" + results);
+				System.out.println("SEMP Request Successful - Path: " + resource + ", Response length: " + (results != null ? results.length() : 0) + " chars");
+				
+				// Log response body at INFO level for troubleshooting
+				if (results != null && results.length() > 0) {
+					// Truncate very long responses for readability, but log enough to see structure
+					String responsePreview = results.length() > 2000 ? results.substring(0, 2000) + "...[truncated]" : results;
+					logger.info("SEMP Response Body: " + responsePreview);
+					System.out.println("SEMP Response Body: " + responsePreview);
+					
+					// Check for errors in response even if HTTP status was 200
+					try {
+						JSONObject responseObj = new JSONObject(results);
+						if (responseObj.has("meta")) {
+							JSONObject metaObj = responseObj.getJSONObject("meta");
+							if (metaObj.has("error")) {
+								JSONObject errorObj = metaObj.getJSONObject("error");
+								int errorCode = errorObj.optInt("code", -1);
+								String errorDesc = errorObj.optString("description", "");
+								String errorStatus = errorObj.optString("status", "");
+								if (errorCode > 0) {
+									logger.error("SEMP Response contains error - Code: " + errorCode + ", Status: " + errorStatus + ", Description: " + errorDesc);
+									System.out.println("SEMP Response contains error - Code: " + errorCode + ", Status: " + errorStatus + ", Description: " + errorDesc);
+									logger.error("Full SEMP Response: " + results);
+									System.out.println("Full SEMP Response: " + results);
+									String errorMsg = "SEMP Error (" + errorCode + "): " + errorStatus + ": " + errorDesc;
+									throw new SempException(errorMsg);
+								}
+							}
+							// Log response code for visibility
+							int responseCode = metaObj.optInt("responseCode", -1);
+							if (responseCode > 0) {
+								logger.info("SEMP Response Code: " + responseCode);
+								System.out.println("SEMP Response Code: " + responseCode);
+							}
+						}
+					} catch (org.json.JSONException e) {
+						// Not valid JSON, log warning but continue
+						logger.warn("SEMP response is not valid JSON, cannot parse for errors: " + e.getMessage());
+					}
+				} else {
+					logger.warn("SEMP Response is null or empty");
+				}
+				
+				logger.debug("Full SEMP Response: " + results);
 				finished = true;
 			} catch (Exception e) {
 				Throwable inner = e.getCause();
@@ -397,20 +442,88 @@ public class SempClient {
 	}
 
 	/**
+	 * Validates that a VPN exists by querying the monitor API.
+	 * This will throw SempException if the VPN does not exist.
+	 * 
+	 * @param vpn Message VPN name to validate
+	 * @return The VPN name if it exists (validates it matches)
+	 * @throws SempException if VPN does not exist or API call fails
+	 */
+	public String validateVpnExists(String vpn) throws SempException {
+		logger.info("========================================");
+		logger.info("Validating VPN exists: " + vpn);
+		logger.info("========================================");
+		System.out.println("========================================");
+		System.out.println("Validating VPN exists: " + vpn);
+		System.out.println("========================================");
+		
+		// Use monitor API to check if VPN exists
+		// This endpoint returns 400 with NOT_FOUND error if VPN doesn't exist
+		String resource = "/msgVpns/{msgVpnName}?select=msgVpnName";
+		resource = resource.replace("{msgVpnName}", vpn);
+		
+		try {
+			String responseText = this.getSempV2Monitoring(resource, ePaginationBehavior.eNone);
+			
+			// Parse response to verify VPN name matches
+			JSONObject responseObj = new JSONObject(responseText);
+			if (responseObj.has("data")) {
+				JSONObject dataObj = responseObj.getJSONObject("data");
+				String returnedVpnName = dataObj.getString("msgVpnName");
+				if (returnedVpnName.equals(vpn)) {
+					logger.info("VPN validation successful - VPN exists: " + vpn);
+					System.out.println("VPN validation successful - VPN exists: " + vpn);
+					return returnedVpnName;
+				} else {
+					String errorMsg = "VPN name mismatch - requested: " + vpn + ", returned: " + returnedVpnName;
+					logger.error(errorMsg);
+					System.out.println("ERROR: " + errorMsg);
+					throw new SempException(errorMsg);
+				}
+			} else {
+				String errorMsg = "VPN validation failed - no data in response for VPN: " + vpn;
+				logger.error(errorMsg);
+				System.out.println("ERROR: " + errorMsg);
+				throw new SempException(errorMsg);
+			}
+		} catch (SempException e) {
+			// Re-throw SempException (which may contain NOT_FOUND error)
+			logger.error("VPN validation failed for VPN: " + vpn + " - " + e.getMessage());
+			System.out.println("ERROR: VPN validation failed for VPN: " + vpn + " - " + e.getMessage());
+			throw e;
+		} catch (IOException e) {
+			// Convert IOException to SempException
+			String errorMsg = "VPN validation failed - IO error: " + e.getMessage();
+			logger.error(errorMsg, e);
+			System.out.println("ERROR: " + errorMsg);
+			throw new SempException(errorMsg);
+		}
+	}
+	
+	/**
 	 * Retrieves queue information for all queues in bulk.
 	 * Fetches queueName, accessType, partitionCount, maxMsgSpoolUsage from config API,
 	 * and msgSpoolUsage from monitor API for efficient filtering and sorting.
 	 * 
 	 * @param vpn Message VPN name
 	 * @return List of QueueInfo objects with partial data (name, accessType, partitionCount, maxMsgSpoolUsage, msgSpoolUsage)
-	 * @throws SempException if API call fails
+	 * @throws SempException if API call fails or VPN does not exist
 	 */
 	public List<QueueInfo> getAllQueueInfo(String vpn) throws SempException {
+		logger.info("========================================");
+		logger.info("getAllQueueInfo() called for VPN: " + vpn);
+		logger.info("========================================");
+		System.out.println("========================================");
+		System.out.println("getAllQueueInfo() called for VPN: " + vpn);
+		System.out.println("========================================");
+		
 		ArrayList<QueueInfo> queueInfos = new ArrayList<QueueInfo>();
 		
 		// Get config properties (accessType, partitionCount, maxMsgSpoolUsage) from config API
 		String configResource = "/msgVpns/{msgVpnName}/queues?select=queueName,accessType,partitionCount,maxMsgSpoolUsage";
 		configResource = configResource.replace("{msgVpnName}", vpn);
+		logger.info("Config resource: " + configResource);
+		System.out.println("Config resource: " + configResource);
 		
 		// Get spool usage from monitor API (with select for efficiency)
 		String monitorResourceSpool = "/msgVpns/{msgVpnName}/queues?select=queueName,msgSpoolUsage";
@@ -442,6 +555,8 @@ public class SempClient {
 				
 				if (pageObj.has("data")) {
 					JSONArray dataArray = pageObj.getJSONArray("data");
+					logger.info("Page " + (pageCount + 1) + " - Found " + dataArray.length() + " queues in data array");
+					System.out.println("Page " + (pageCount + 1) + " - Found " + dataArray.length() + " queues in data array");
 					for (int i = 0; i < dataArray.length(); i++) {
 						JSONObject queueObj = dataArray.getJSONObject(i);
 						QueueInfo info = new QueueInfo();
@@ -595,7 +710,13 @@ public class SempClient {
 			// Convert map to list
 			queueInfos.addAll(queueMap.values());
 			
-			logger.info("Retrieved " + queueInfos.size() + " queues with properties");
+			logger.info("Retrieved " + queueInfos.size() + " queues with properties for VPN: " + vpn);
+			System.out.println("Retrieved " + queueInfos.size() + " queues with properties for VPN: " + vpn);
+			
+			if (queueInfos.size() == 0) {
+				logger.warn("No queues found for VPN: " + vpn + ". This might indicate the VPN does not exist or has no queues.");
+				System.out.println("WARNING: No queues found for VPN: " + vpn + ". This might indicate the VPN does not exist or has no queues.");
+			}
 		} catch (SempException e) {
 			// Preserve the original SempException (which may contain connection errors)
 			// Check if it's a connection error and provide a clearer message
