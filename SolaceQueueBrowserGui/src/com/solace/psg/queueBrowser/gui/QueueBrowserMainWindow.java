@@ -448,10 +448,23 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 								if (table.getSelectedRow() != row) {
 									table.setRowSelectionInterval(row, row);
 								}
-								onBrowse(selectedQueue, frame);
+								// Get queue name from the selected row and update selectedQueue
+								String queueName = getSelectedQueue();
+								if (queueName != null && !queueName.isEmpty()) {
+									onBrowse(queueName, frame);
+								} else {
+									logger.warn("Cannot browse: queue name is null or empty for row " + row);
+									JOptionPane.showMessageDialog(frame,
+										"Cannot browse queue: Queue name is not available.",
+										"Browse Error",
+										JOptionPane.ERROR_MESSAGE);
+								}
 							} catch (JCSMPException | SempException e1 ) {
-								// TODO Auto-generated catch block
-								e1.printStackTrace();
+								logger.error("Error browsing queue on double-click: " + e1.getMessage(), e1);
+								JOptionPane.showMessageDialog(frame,
+									"Error browsing queue: " + e1.getMessage(),
+									"Browse Error",
+									JOptionPane.ERROR_MESSAGE);
 							}
 						}
 					}
@@ -621,7 +634,17 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 			restoreButton.addActionListener(new ActionListener() {
 				@Override
 				public void actionPerformed(ActionEvent e) {
-					onRestore(selectedQueue, frame);
+					// Get queue name from current selection to ensure it's up to date
+					String queueName = getSelectedQueue();
+					if (queueName != null && !queueName.isEmpty()) {
+						onRestore(queueName, frame);
+					} else {
+						logger.warn("Cannot restore: queue name is null or empty");
+						JOptionPane.showMessageDialog(frame,
+							"Cannot restore messages: Please select a queue first.",
+							"Restore Error",
+							JOptionPane.ERROR_MESSAGE);
+					}
 				}
 			});
 

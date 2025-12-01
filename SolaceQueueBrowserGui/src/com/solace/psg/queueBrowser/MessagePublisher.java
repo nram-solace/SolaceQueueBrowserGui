@@ -2,6 +2,10 @@ package com.solace.psg.queueBrowser;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,6 +18,7 @@ import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.DeliveryMode;
 import com.solacesystems.jcsmp.Destination;
 import com.solacesystems.jcsmp.JCSMPException;
+import com.solacesystems.jcsmp.JCSMPErrorResponseException;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
@@ -29,10 +34,29 @@ import com.solacesystems.jcsmp.XMLMessageProducer;
  */
 public class MessagePublisher {
 	private static final Logger logger = LoggerFactory.getLogger(MessagePublisher.class.getName());
+	private static final long PUBLISH_TIMEOUT_SECONDS = 30;
 	
 	private Broker broker;
 	private JCSMPSession session;
 	private XMLMessageProducer producer;
+	
+	// Map to track pending publish operations: key -> (latch, error holder)
+	private final ConcurrentHashMap<String, PublishResult> pendingPublishes = new ConcurrentHashMap<>();
+	// Track the most recent publish operation for handling null-key callbacks
+	private final AtomicReference<PublishResult> currentPublish = new AtomicReference<>();
+	
+	/**
+	 * Inner class to hold publish result (latch and error)
+	 */
+	private static class PublishResult {
+		final CountDownLatch latch = new CountDownLatch(1);
+		final AtomicReference<JCSMPException> error = new AtomicReference<>();
+		final String messageId; // For logging/debugging
+		
+		PublishResult(String messageId) {
+			this.messageId = messageId;
+		}
+	}
 	
 	public MessagePublisher(Broker broker) throws BrokerException {
 		this.broker = broker;
@@ -53,18 +77,55 @@ public class MessagePublisher {
 			session = JCSMPFactory.onlyInstance().createSession(properties);
 			session.connect();
 			
-			// Create producer with event handler
+			// Create producer with event handler to catch async errors
 			producer = session.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
 				@Override
 				public void responseReceivedEx(Object key) {
-					// Handle publish confirmation
-					logger.debug("Message published successfully: " + key);
+					// Handle publish confirmation - count down latch if we're waiting
+					String keyStr = (key != null) ? String.valueOf(key) : null;
+					logger.debug("Message published successfully: " + (keyStr != null ? keyStr : "null key"));
+					
+					PublishResult result = null;
+					if (keyStr != null) {
+						result = pendingPublishes.get(keyStr);
+					}
+					
+					// If key is null or not found, try current publish
+					if (result == null) {
+						result = currentPublish.get();
+					}
+					
+					if (result != null) {
+						result.latch.countDown();
+					}
 				}
 				
 				@Override
 				public void handleErrorEx(Object key, JCSMPException e, long timestamp) {
-					// Handle publish errors
-					logger.error("Error publishing message: " + key, e);
+					// Handle publish errors - this is where async errors like 503 come through
+					String keyStr = (key != null) ? String.valueOf(key) : null;
+					logger.error("Error publishing message (key: " + (keyStr != null ? keyStr : "null") + "): " + e.getMessage(), e);
+					
+					PublishResult result = null;
+					if (keyStr != null) {
+						result = pendingPublishes.get(keyStr);
+					}
+					
+					// If key is null or not found, use current publish (common case for queue sends)
+					if (result == null) {
+						result = currentPublish.get();
+						if (result != null) {
+							logger.debug("Applying error to current publish operation for message: " + result.messageId);
+						}
+					}
+					
+					if (result != null) {
+						result.error.set(e);
+						result.latch.countDown();
+					} else {
+						// Error for a message we're no longer tracking - log it
+						logger.warn("Received publish error but no pending operation found (key: " + (keyStr != null ? keyStr : "null") + "), error: " + e.getMessage());
+					}
 				}
 			});
 			
@@ -83,15 +144,131 @@ public class MessagePublisher {
 	 * @throws BrokerException If publishing fails
 	 */
 	public void publishMessage(String queueName, ParsedMessage parsedMessage) throws BrokerException {
+		// Validate queue name
+		if (queueName == null || queueName.trim().isEmpty()) {
+			String errorMsg = "Failed to restore message " + parsedMessage.messageId + ": Queue name cannot be null or empty";
+			logger.error(errorMsg);
+			throw new BrokerException(errorMsg);
+		}
+		
+		String publishKey = parsedMessage.messageId + "-" + System.currentTimeMillis();
+		PublishResult result = new PublishResult(parsedMessage.messageId);
+		pendingPublishes.put(publishKey, result);
+		currentPublish.set(result); // Set as current for null-key callback handling
+		
 		try {
 			BytesXMLMessage message = reconstructMessage(parsedMessage);
-			Queue queue = JCSMPFactory.onlyInstance().createQueue(queueName);
-			producer.send(message, queue);
-			logger.info("Published message " + parsedMessage.messageId + " to queue " + queueName);
-		} catch (JCSMPException e) {
-			String errorMsg = "Failed to publish message " + parsedMessage.messageId + " to queue " + queueName + ": " + e.getMessage();
+			Queue queue = JCSMPFactory.onlyInstance().createQueue(queueName.trim());
+			
+			// Set application message ID as correlation key for tracking
+			message.setApplicationMessageId(publishKey);
+			
+			// Send message (asynchronous) - catch synchronous exceptions
+			try {
+				producer.send(message, queue);
+			} catch (JCSMPException e) {
+				// Synchronous error during send
+				pendingPublishes.remove(publishKey);
+				currentPublish.compareAndSet(result, null); // Clear current
+				String errorMsg = formatErrorMessage(e, parsedMessage.messageId, queueName);
+				logger.error("Synchronous error sending message " + parsedMessage.messageId + " to queue " + queueName + ": " + errorMsg, e);
+				throw new BrokerException(errorMsg);
+			}
+			
+			// Wait briefly for async error callback (most errors come back quickly)
+			// Use a short timeout - if no error callback, assume success
+			boolean callbackReceived = result.latch.await(2, TimeUnit.SECONDS);
+			
+			// Clear current publish before checking for errors
+			currentPublish.compareAndSet(result, null);
+			
+			if (callbackReceived) {
+				// A callback was received (either success or error)
+				JCSMPException error = result.error.get();
+				if (error != null) {
+					// Error was received via callback
+					pendingPublishes.remove(publishKey);
+					String errorMsg = formatErrorMessage(error, parsedMessage.messageId, queueName);
+					logger.error("Asynchronous error publishing message " + parsedMessage.messageId + " to queue " + queueName + ": " + errorMsg, error);
+					throw new BrokerException(errorMsg);
+				} else {
+					// Success callback received
+					pendingPublishes.remove(publishKey);
+					logger.info("Published message " + parsedMessage.messageId + " to queue " + queueName);
+					return; // Success
+				}
+			}
+			
+			// Timeout - check if there was an error set (shouldn't happen, but be safe)
+			JCSMPException error = result.error.get();
+			if (error != null) {
+				pendingPublishes.remove(publishKey);
+				String errorMsg = formatErrorMessage(error, parsedMessage.messageId, queueName);
+				logger.error("Error detected after timeout for message " + parsedMessage.messageId + " to queue " + queueName + ": " + errorMsg, error);
+				throw new BrokerException(errorMsg);
+			}
+			
+			// Timeout with no error - assume success (most errors come back quickly)
+			pendingPublishes.remove(publishKey);
+			logger.info("Published message " + parsedMessage.messageId + " to queue " + queueName + " (no error callback received)");
+			
+		} catch (InterruptedException e) {
+			pendingPublishes.remove(publishKey);
+			currentPublish.compareAndSet(result, null);
+			Thread.currentThread().interrupt();
+			String errorMsg = "Interrupted while waiting for publish confirmation for message " + parsedMessage.messageId + " to queue " + queueName;
 			logger.error(errorMsg, e);
 			throw new BrokerException(errorMsg);
+		} catch (BrokerException e) {
+			// Re-throw BrokerException as-is
+			currentPublish.compareAndSet(result, null);
+			throw e;
+		} catch (Exception e) {
+			pendingPublishes.remove(publishKey);
+			currentPublish.compareAndSet(result, null);
+			String errorMsg = "Unexpected error publishing message " + parsedMessage.messageId + " to queue " + queueName + ": " + e.getMessage();
+			logger.error(errorMsg, e);
+			throw new BrokerException(errorMsg);
+		}
+	}
+	
+	/**
+	 * Format error message with user-friendly descriptions for common error codes
+	 */
+	private String formatErrorMessage(JCSMPException e, String messageId, String queueName) {
+		if (e instanceof JCSMPErrorResponseException) {
+			JCSMPErrorResponseException errorResp = (JCSMPErrorResponseException) e;
+			int errorCode = errorResp.getSubcodeEx();
+			String errorMessage = errorResp.getMessage();
+			
+			// Handle specific error codes with user-friendly messages
+			if (errorCode == 503) {
+				// Spool Over Quota
+				return String.format(
+					"Failed to restore message %s to queue '%s': Target queue is full (Spool Over Quota). " +
+					"The queue has exceeded its message VPN limit. Please free up space in the queue or increase the quota limit.",
+					messageId, queueName);
+			} else if (errorCode == 404) {
+				// Queue not found
+				return String.format(
+					"Failed to restore message %s to queue '%s': Queue not found. Please verify the queue name exists.",
+					messageId, queueName);
+			} else if (errorCode == 403) {
+				// Permission denied
+				return String.format(
+					"Failed to restore message %s to queue '%s': Permission denied. Please check your messaging credentials.",
+					messageId, queueName);
+			} else {
+				// Other error codes
+				return String.format(
+					"Failed to restore message %s to queue '%s': Error %d - %s",
+					messageId, queueName, errorCode, errorMessage);
+			}
+		} else {
+			// Non-error-response exceptions
+			return String.format(
+				"Failed to restore message %s to queue '%s': %s",
+				messageId, queueName, e.getMessage());
 		}
 	}
 	
@@ -260,4 +437,5 @@ public class MessagePublisher {
 		}
 	}
 }
+
 

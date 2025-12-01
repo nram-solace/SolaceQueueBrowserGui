@@ -782,8 +782,17 @@ public class RestoreDialog {
 		
 		String targetQueue = defaultQueueName;
 		
+		// Validate queue name
+		if (targetQueue == null || targetQueue.trim().isEmpty()) {
+			JOptionPane.showMessageDialog(dialog,
+				"Target queue name is not set. Please select a queue first.",
+				"Invalid Queue Name",
+				JOptionPane.ERROR_MESSAGE);
+			return;
+		}
+		
 		// Perform restore (no confirmation prompt)
-		performRestore(selectedMessages, targetQueue);
+		performRestore(selectedMessages, targetQueue.trim());
 	}
 	
 	/**
@@ -821,6 +830,7 @@ public class RestoreDialog {
 		SwingWorker<Integer, Integer> worker = new SwingWorker<Integer, Integer>() {
 			private int successCount = 0;
 			private int failCount = 0;
+			private java.util.List<String> errorMessages = new java.util.ArrayList<>();
 			
 			@Override
 			protected Integer doInBackground() throws Exception {
@@ -845,7 +855,10 @@ public class RestoreDialog {
 							logger.info("performRestore: Successfully restored messageId={}", msg.messageId);
 						} catch (BrokerException e) {
 							failCount++;
+							String errorMsg = e.getMessage();
+							errorMessages.add(errorMsg);
 							logger.error("Failed to restore message " + msg.messageId, e);
+							CommandLog.instance().log("Failed to restore message " + msg.messageId + ": " + errorMsg);
 						}
 						
 						publish(successCount + failCount);
@@ -877,26 +890,67 @@ public class RestoreDialog {
 					successCount = get();
 					failCount = messages.size() - successCount;
 					
-					String message;
+					String dialogMessage;
+					String statusMessage;
+					
 					if (failCount == 0) {
-						message = successCount + " message(s) successfully restored to queue '" + targetQueue + "'.";
-						JOptionPane.showMessageDialog(dialog, message,
+						dialogMessage = successCount + " message(s) successfully restored to queue '" + targetQueue + "'.";
+						statusMessage = "Restore complete. " + successCount + " successful, " + failCount + " failed.";
+						JOptionPane.showMessageDialog(dialog, dialogMessage,
 							"Restore Complete",
 							JOptionPane.INFORMATION_MESSAGE);
-						
-						// Reset message selection after successful restore
-						selectedMessageKeys.clear();
-						updateSelectAllCheckBoxState();
-						updateRestoreButtonState();
 					} else {
-						message = successCount + " message(s) restored successfully.\n" +
-							failCount + " message(s) failed.";
-						JOptionPane.showMessageDialog(dialog, message,
+						// Build detailed error message for dialog
+						StringBuilder errorDetails = new StringBuilder();
+						errorDetails.append(successCount).append(" message(s) restored successfully.\n");
+						errorDetails.append(failCount).append(" message(s) failed.\n\n");
+						
+						// Check if all failures are due to queue quota
+						boolean allQuotaErrors = true;
+						for (String errorMsg : errorMessages) {
+							if (errorMsg != null && !errorMsg.contains("Spool Over Quota") && !errorMsg.contains("queue is full")) {
+								allQuotaErrors = false;
+								break;
+							}
+						}
+						
+						if (allQuotaErrors && !errorMessages.isEmpty()) {
+							// All errors are quota-related - show a clear message
+							errorDetails.append("All failures are due to the target queue being full (Spool Over Quota).\n");
+							errorDetails.append("The queue '").append(targetQueue).append("' has exceeded its message VPN limit.\n");
+							errorDetails.append("Please free up space in the queue or increase the quota limit.");
+						} else {
+							// Mixed or other errors - show first few error details
+							errorDetails.append("Error details:\n");
+							int maxErrorsToShow = Math.min(3, errorMessages.size());
+							for (int i = 0; i < maxErrorsToShow; i++) {
+								String errorMsg = errorMessages.get(i);
+								// Truncate long error messages
+								if (errorMsg.length() > 150) {
+									errorMsg = errorMsg.substring(0, 147) + "...";
+								}
+								errorDetails.append("• ").append(errorMsg).append("\n");
+							}
+							if (errorMessages.size() > maxErrorsToShow) {
+								errorDetails.append("... and ").append(errorMessages.size() - maxErrorsToShow)
+									.append(" more error(s).");
+							}
+						}
+						
+						dialogMessage = errorDetails.toString();
+						statusMessage = "Restore complete. " + successCount + " successful, " + failCount + " failed.";
+						JOptionPane.showMessageDialog(dialog, dialogMessage,
 							"Restore Complete",
 							JOptionPane.WARNING_MESSAGE);
 					}
 					
-					setStatus(message);
+					// Clear message selections after restore (success or failure)
+					selectedMessageKeys.clear();
+					updateSelectAllCheckBoxState();
+					updateRestoreButtonState();
+					
+					// Set short status message
+					setStatus(statusMessage);
 					
 					// Refresh display
 					displayPage(nCurPage);
