@@ -1,4 +1,4 @@
-![Project Logo](./docs/img/logo.png "SolaceQueueBrowserGui 2.0 Logo")
+![Project Logo](./SolaceQueueBrowserGui/docs/img/logo.png "SolaceQueueBrowserGui 2.0 Logo")
 
 # SolaceQueueBrowserGui 2.0
 

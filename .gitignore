@@ -31,8 +31,8 @@ buildNumber.properties
 *.jar
 *.war
 *.ear
-*.zip
-*.tar.gz
+#*.zip
+#*.tar.gz
 *.rar
 hs_err_pid*
 
