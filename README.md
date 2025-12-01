@@ -23,6 +23,33 @@ Compile and build jar:
 
 The build script creates a self-contained executable fat jar.
 
+### Building Runtime Distribution Package
+
+To create a clean runtime distribution package (without source code or development files):
+
+```bash
+./scripts/build-distribution.sh
+```
+
+Or manually:
+```bash
+mvn clean package
+```
+
+This creates distribution packages in the `target/` directory:
+- `SolaceQueueBrowserGui-<version>-runtime-distribution.zip`
+- `SolaceQueueBrowserGui-<version>-runtime-distribution.tar.gz`
+
+The distribution package includes:
+- Application JAR (with all dependencies)
+- Required configuration files (`system.json`, `log4j2.properties`, icons)
+- Runtime scripts (`run.sh`, `encrypt-password.sh`, `crypt-util.sh`)
+- Documentation (`README.md`, `USER_GUIDE.md`)
+
+**Note:** The distribution package version is automatically read from `config/system.json` (currently `v2.2.0`), not from the Maven `pom.xml` version.
+
+See `DISTRIBUTION_README.md` for detailed information about the distribution package.
+
 ## Runing without building
 
 The latest build is contained in the repo. Simply run the jar contained in the target folder, using the instructions for running below.
