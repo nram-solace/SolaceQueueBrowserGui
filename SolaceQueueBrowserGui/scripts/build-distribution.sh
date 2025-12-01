@@ -105,6 +105,8 @@ if [ $? -eq 0 ]; then
         echo "To extract and use:"
         echo "  unzip $ZIP_FILE"
         echo "  cd SolaceQueueBrowserGui-*/"
+        echo "  cp config/sample-config.json config/default.json"
+        echo "  # Edit config/default.json with your broker details"
         echo "  ./scripts/run.sh -c config/default.json"
         echo ""
     else

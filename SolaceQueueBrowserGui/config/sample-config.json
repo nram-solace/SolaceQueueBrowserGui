@@ -21,21 +21,11 @@
 			"messagingPw": "ENC:AES256GCM:glqBL0OCe+13V/62Zx3is7vNhtQ3ug0=:9xT2vu+X0Dtnpda6:YFrGRlBzdiiBsENBd351uw=="
 		},
 		{
-            "name": "AEM Broker - POC",
-            "sempHost": "https://mr-connection-2bygqpfpkzd.messaging.solace.cloud:943/SEMP/v2/config",
-            "sempAdminUser": "nvidia-eis-service-admin",
-            "sempAdminPw": "ENC:AES256GCM:qJxQOO7qVGXbiAVNxUeAWRBoD85vud17DI5Lij5UBSuvUnM34RUraRgo:mC15enrBo+uYpUbJ:M3Hu4DSZzf5sHt0nnUVEQw==",
-            "msgVpnName": "nvidia-eis-service",
-            "messagingHost": "tcps://mr-connection-2bygqpfpkzd.messaging.solace.cloud:55443",
-            "messagingClientUsername": "nram",
-            "messagingPw" : "ENC:AES256GCM:uwWhICa1or36A+qzn/oFXUdXxsExI4E=:8qbrZ1iFBdzKnJAM:PM2z08t6uiNUeRNY1pGiew=="
-        },
-		{
             "name": "Cloud Broker - Test",
             "sempHost": "https://nramtest.messaging.solace.cloud:943/SEMP/v2/config",
             "sempAdminUser": "mission-control-manager",
             "sempAdminPw": "ENC:AES256GCM:Z8Fb6KU0gnSUd4bqsRRddzD/aOjhxW0r/OegoidalcqdK4dhlDYSosKu:uq+Zjg2agRXyf69K:mVkx6rq4Ax4Tmiq8rwlaUg==",
-            "msgVpnName": "nram-dt-test",
+            "msgVpnName": "nram-test",
             "messagingHost": "tcps://nramtest.messaging.solace.cloud::55443",
             "messagingClientUsername": "test",
             "messagingPw" : "ENC:AES256GCM:damNQc8IFjsAGGTlhSqK03C91brjkVc=:ER/A9/B29Tu4dID8:U0ZyNgcM/IIfArgIwue14g=="

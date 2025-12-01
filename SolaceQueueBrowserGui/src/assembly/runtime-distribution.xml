@@ -42,7 +42,7 @@
             <directory>${project.basedir}/config</directory>
             <outputDirectory>config</outputDirectory>
             <includes>
-                <include>default.json</include>
+                <include>sample-config.json</include>
                 <include>solace-cloud.json</include>
             </includes>
             <fileMode>0644</fileMode>

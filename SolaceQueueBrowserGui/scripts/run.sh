@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # SolaceQueueBrowserGui Run Script
-# Runs the application with a specified config file or default.json
+# Runs the application with a specified config file (defaults to config/default.json)
+# Note: Users should create config/default.json by copying config/sample-config.json
 # Supports master password for decrypting encrypted passwords
 
 set -e  # Exit on any error
@@ -46,6 +47,9 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "  # Run with master password (for encrypted passwords):"
             echo "  $0 -c config/default.json --master-password \"myMasterKey\""
+            echo ""
+            echo "Note: Create config/default.json by copying config/sample-config.json and"
+            echo "      updating it with your specific broker connection details."
             echo ""
             echo "Important Notes:"
             echo "  - Always quote the master password if it contains special characters"

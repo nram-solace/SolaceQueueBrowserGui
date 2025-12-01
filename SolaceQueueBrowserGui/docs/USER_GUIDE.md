@@ -65,7 +65,7 @@ SolaceQueueBrowserGui 2.0 is a desktop GUI application for browsing, inspecting,
    ├── config/                                                   # Configuration files
    │   ├── system.json                                          # System configuration (required)
    │   ├── log4j2.properties                                    # Logging configuration
-   │   ├── default.json                                         # Sample user configuration
+   │   ├── sample-config.json                                   # Sample user configuration template
    │   ├── solace-cloud.json                                    # Sample Solace Cloud configuration
    │   └── *.png                                                # Application icons
    ├── scripts/                                                  # Runtime scripts
@@ -80,6 +80,10 @@ SolaceQueueBrowserGui 2.0 is a desktop GUI application for browsing, inspecting,
    ```
 
 ### Running the Application
+
+**Before running, create your configuration file:**
+1. Copy `config/sample-config.json` to `config/default.json`
+2. Edit `config/default.json` with your specific broker connection details
 
 #### Using the Run Script (Recommended)
 
@@ -117,6 +121,9 @@ Starting SolaceQueueBrowserGui
    JAR: SolaceQueueBrowserGui-v2.3.0-jar-with-dependencies.jar
    Config: config/default.json
    Master Password: [provided]
+```
+
+**Note:** Replace `config/default.json` with your own configuration file name if you created a custom one.
 
 =================================================================
 Starting Solace Queue Browser - Version: v2.3.0
@@ -188,6 +195,8 @@ When the application detects encrypted passwords, it prompts for the master pass
 ./scripts/run.sh -c config/default.json --master-password "masterKey"
 ```
 
+**Note:** Ensure you have created `config/default.json` by copying and editing `config/sample-config.json` with your broker details.
+
 **Note**: Quote the master password if it contains special characters (e.g., `#`, `$`, `!`).
 
 ### Decrypting Passwords (Verification)
@@ -241,6 +250,11 @@ The system configuration is loaded first, followed by the user configuration fil
 
 #### User Configuration File Format
 
+**Getting Started:**
+1. Copy `config/sample-config.json` to `config/default.json`
+2. Edit `config/default.json` with your specific broker connection details (hostnames, credentials, VPN names, etc.)
+3. The `sample-config.json` file is provided as a reference template only
+
 User configuration files contain broker connection information. This file supports multiple broker connections in a list. 
 
 ```json
@@ -280,7 +294,7 @@ User configuration files contain broker connection information. This file suppor
 - `messagingPw`: Messaging client password (supports encrypted format with ENC:)
 
 
-See `../config/default.json` for sample config file with multiple entries.
+See `../config/sample-config.json` for a sample configuration file with multiple broker entries. Copy this file to `config/default.json` and update it with your specific broker connection details.
 
 ---
 

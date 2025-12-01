@@ -56,7 +56,10 @@ SolaceQueueBrowserGui 2.0 is a desktop application that provides a comprehensive
    cd SolaceQueueBrowserGui-VERSION/
    ```
 
-2. **Configure your broker connection** in `config/default.json` (or create your own config file)
+2. **Create your broker configuration file**:
+   - Copy `config/sample-config.json` to `config/default.json`
+   - Edit `config/default.json` with your specific broker connection details
+   - See `config/sample-config.json` for reference structure
 
 3. **Run the application**:
    ```bash
@@ -67,7 +70,11 @@ For detailed instructions, see the [User Guide](./docs/USER_GUIDE.md).
 
 ## Configuration
 
-The application uses JSON configuration files to connect to Solace brokers. A sample configuration file is provided at `config/default.json`. 
+The application uses JSON configuration files to connect to Solace brokers. A sample configuration file is provided at `config/sample-config.json` for reference.
+
+**To get started:**
+1. Copy `config/sample-config.json` to `config/default.json`
+2. Edit `config/default.json` with your specific broker connection details (hostnames, credentials, VPN names, etc.)
 
 **Basic configuration structure:**
 ```json
@@ -166,9 +173,11 @@ For detailed instructions, see the [Operations section](./docs/USER_GUIDE.md#ope
 ## Package Contents
 
 - **Application JAR** - Self-contained executable with all dependencies
-- **Configuration files** - System config, logging config, sample user configs, and icons
+- **Configuration files** - System config, logging config, sample config templates (`sample-config.json`, `solace-cloud.json`), and icons
 - **Runtime scripts** - `run.sh` (application launcher) and `crypt-util.sh` (password encryption utility)
 - **Documentation** - This README and comprehensive User Guide in `docs/` folder
+
+**Note:** Create your own `config/default.json` by copying `config/sample-config.json` and updating it with your broker connection details.
 
 ## Documentation
 
