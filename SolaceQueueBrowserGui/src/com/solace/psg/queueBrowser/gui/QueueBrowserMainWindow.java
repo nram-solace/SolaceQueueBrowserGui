@@ -623,13 +623,8 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 			String detailsFontFamily = (thisCfg.fontFamily != null && !thisCfg.fontFamily.isEmpty()) ? thisCfg.fontFamily : Font.SANS_SERIF;
 			detailsLabel.setFont(new Font(detailsFontFamily, Font.PLAIN, 14)); // Changed from ITALIC to PLAIN, reduced size slightly
 			
-			// Use same font family as the label for consistency
-			String placeholderFontFamily = (thisCfg.fontFamily != null && !thisCfg.fontFamily.isEmpty()) ? thisCfg.fontFamily : Font.SANS_SERIF;
-			detailsLabel.setText("<html>"
-	                + "<div style='width: 280px; text-align: left; vertical-align:top; font-family: " + placeholderFontFamily + ";'>"
-	                + "<p>Select a queue on the left to see details.</p>"
-	                + "</div>"
-	                + "</html>");
+			// Initialize with empty text - will be populated when queue is selected
+			detailsLabel.setText("");
 			detailsLabel.setVerticalAlignment(SwingConstants.TOP);
 	        
 	        JPanel detailsPanel = new JPanel();
@@ -1391,13 +1386,8 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 			moveAllButton.setEnabled(false);
 			restoreButton.setEnabled(false);
 			
-			// Reset details label
-			String placeholderFontFamily = (thisCfg.fontFamily != null && !thisCfg.fontFamily.isEmpty()) ? thisCfg.fontFamily : (thisCfg.defaultFontFamilyFallback != null ? thisCfg.defaultFontFamilyFallback : Font.SANS_SERIF);
-			detailsLabel.setText("<html>"
-					+ "<div style='width: 280px; text-align: left; vertical-align:top; font-family: " + placeholderFontFamily + ";'>"
-					+ "<p>Select a queue on the left to see details.</p>"
-					+ "</div>"
-					+ "</html>");
+			// Reset details label - will be populated when queue is auto-selected
+			detailsLabel.setText("");
 			qIconlabel.setVisible(false);
 			
 			logger.info("========================================");
@@ -2199,6 +2189,20 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 						if (moveAllButton != null) moveAllButton.setEnabled(true);
 						if (restoreButton != null) restoreButton.setEnabled(true);
 					}
+					// Explicitly load queue details to ensure they're displayed
+					// Use invokeLater to ensure this happens after table update is complete
+					final String queueToLoad = selectedQueue;
+					SwingUtilities.invokeLater(() -> {
+						try {
+							this.onQueueNameSelected(queueToLoad, detailsLabel, buttonPanel);
+						} catch (SempException e) {
+							logger.error("Error loading queue details for reselected queue: " + e.getMessage());
+							e.printStackTrace();
+						} catch (IOException e) {
+							logger.error("Error loading queue details for reselected queue: " + e.getMessage());
+							e.printStackTrace();
+						}
+					});
 					queueFound = true;
 					logger.debug("updateTable: Reselected queue: " + queueToReselect + " at row " + i);
 					break;
@@ -2206,32 +2210,57 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 			}
 		}
 		
-		// If queue was not found in the filtered list, clear selection and disable buttons
+		// If queue was not found in the filtered list, auto-select first queue if available
 		if (!queueFound) {
-			table.clearSelection();
-			selectedQueue = "";
-			if (browseButton != null) {
-				browseButton.setEnabled(false);
-				if (copyAllButton != null) copyAllButton.setEnabled(false);
-				if (deleteAllButton != null) deleteAllButton.setEnabled(false);
-				if (moveAllButton != null) moveAllButton.setEnabled(false);
-				if (restoreButton != null) restoreButton.setEnabled(false);
-			}
-			// Clear the queue details panel
-			if (detailsLabel != null) {
-				String placeholderFontFamily = (thisCfg != null && thisCfg.fontFamily != null && !thisCfg.fontFamily.isEmpty()) ? thisCfg.fontFamily : (thisCfg != null && thisCfg.defaultFontFamilyFallback != null ? thisCfg.defaultFontFamilyFallback : Font.SANS_SERIF);
-				detailsLabel.setText("<html>"
-					+ "<div style='width: 280px; text-align: left; vertical-align:top; font-family: " + placeholderFontFamily + ";'>"
-					+ "<p>Select a queue on the left to see details.</p>"
-					+ "</div>"
-					+ "</html>");
-			}
-			// Hide the queue icon if it exists
-			if (qIconlabel != null) {
-				qIconlabel.setVisible(false);
+			if (queuesToDisplay.size() > 0) {
+				// Auto-select the first queue
+				table.setRowSelectionInterval(0, 0);
+				selectedQueue = queuesToDisplay.get(0).name;
+				// Enable buttons
+				if (browseButton != null) {
+					browseButton.setEnabled(true);
+					if (copyAllButton != null) copyAllButton.setEnabled(true);
+					if (deleteAllButton != null) deleteAllButton.setEnabled(true);
+					if (moveAllButton != null) moveAllButton.setEnabled(true);
+					if (restoreButton != null) restoreButton.setEnabled(true);
+				}
+				// Load queue details
+				// Use invokeLater to ensure this happens after table update is complete
+				final String queueToLoad = selectedQueue;
+				SwingUtilities.invokeLater(() -> {
+					try {
+						this.onQueueNameSelected(queueToLoad, detailsLabel, buttonPanel);
+					} catch (SempException e) {
+						logger.error("Error loading queue details for auto-selected queue: " + e.getMessage());
+						e.printStackTrace();
+					} catch (IOException e) {
+						logger.error("Error loading queue details for auto-selected queue: " + e.getMessage());
+						e.printStackTrace();
+					}
+				});
+				logger.debug("updateTable: Auto-selected first queue: " + selectedQueue);
+			} else {
+				// No queues available, clear selection and disable buttons
+				table.clearSelection();
+				selectedQueue = "";
+				if (browseButton != null) {
+					browseButton.setEnabled(false);
+					if (copyAllButton != null) copyAllButton.setEnabled(false);
+					if (deleteAllButton != null) deleteAllButton.setEnabled(false);
+					if (moveAllButton != null) moveAllButton.setEnabled(false);
+					if (restoreButton != null) restoreButton.setEnabled(false);
+				}
+				// Clear the queue details panel (only when no queues available)
+				if (detailsLabel != null) {
+					detailsLabel.setText("");
+				}
+				// Hide the queue icon if it exists
+				if (qIconlabel != null) {
+					qIconlabel.setVisible(false);
+				}
 			}
 			if (queueToReselect != null && !queueToReselect.isEmpty()) {
-				logger.debug("updateTable: Queue " + queueToReselect + " was filtered out, selection cleared and details panel cleared");
+				logger.debug("updateTable: Queue " + queueToReselect + " was filtered out");
 			}
 		}
 		
