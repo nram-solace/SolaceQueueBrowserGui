@@ -5,46 +5,20 @@ REM Wrapper script for encrypting/decrypting passwords using PasswordEncryptionC
 REM Change to the project directory (parent of scripts/)
 cd /d "%~dp0\.."
 
-REM Find the JAR file - check both development and distribution locations
+REM Find the JAR file in target/ directory
+setlocal enabledelayedexpansion
 set JAR_FILE=
 
-REM First, check in target/ directory (development environment)
-if exist "target\" (
-    for %%f in (target\SolaceQueueBrowserGui-*-jar-with-dependencies.jar) do (
-        set JAR_FILE=%%f
-        goto jar_found_target
-    )
+for /f "delims=" %%f in ('dir /b target\SolaceQueueBrowserGui-*-jar-with-dependencies.jar 2^>nul') do (
+    set JAR_FILE=target\%%f
+    goto jar_found
 )
 
-:jar_found_target
-REM If not found, check in current directory (distribution package)
-if "%JAR_FILE%"=="" (
-    for %%f in (SolaceQueueBrowserGui-*-jar-with-dependencies.jar) do (
-        set JAR_FILE=%%f
-        goto jar_found_current
-    )
-)
-
-:jar_found_current
-REM If still not found, check in parent directory (in case we're in a subdirectory)
-if "%JAR_FILE%"=="" (
-    for %%f in (..\SolaceQueueBrowserGui-*-jar-with-dependencies.jar) do (
-        set JAR_FILE=%%f
-        goto jar_found_parent
-    )
-)
-
-:jar_found_parent
-if "%JAR_FILE%"=="" (
-    echo Error: JAR file not found!
+:jar_found
+if "!JAR_FILE!"=="" (
+    echo Error: JAR file not found in target/ directory!
     echo.
-    echo Searched in:
-    echo   - target/ directory (development)
-    echo   - current directory (distribution)
-    echo   - parent directory
-    echo.
-    echo If running from source, please run 'scripts\build.bat' first to build the project
-    echo If running from distribution, ensure the JAR file is in the same directory as this script
+    echo Please run 'scripts\build.bat' first to build the project
     exit /b 1
 )
 
