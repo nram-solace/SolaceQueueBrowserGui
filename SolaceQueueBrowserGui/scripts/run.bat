@@ -66,7 +66,7 @@ echo Use --help for usage information
 exit /b 1
 
 :show_help
-if %SHOW_HELP%==0 goto args_done
+if "%SHOW_HELP%"=="0" goto args_done
 echo.
 echo Usage: %~nx0 [options]
 echo.
