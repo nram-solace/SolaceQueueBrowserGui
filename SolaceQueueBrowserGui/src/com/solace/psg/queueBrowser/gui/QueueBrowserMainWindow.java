@@ -884,6 +884,11 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 							logger.error("Broker switch failed: " + ex.getMessage(), ex);
 							// Error dialog is already shown in switchBroker() or initializeBrokerConnections()
 							
+							// Reset cursor in case it wasn't reset in switchBroker()
+							if (frame != null) {
+								frame.setCursor(Cursor.getDefaultCursor());
+							}
+							
 							// Restore previous broker state
 							logger.info("Attempting to restore previous broker state...");
 							logger.info("  - previousIndex: " + previousIndex);
@@ -1354,6 +1359,8 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 			logger.error("Connection failed - error dialog shown to user");
 			logger.error("========================================");
 			// Error dialog already shown in initializeBrokerConnections()
+			// Reset cursor before throwing exception
+			frame.setCursor(Cursor.getDefaultCursor());
 			// Throw BrokerException so caller can restore previous broker state
 			throw new BrokerException("Failed to connect to broker: " + brokerName);
 		}
