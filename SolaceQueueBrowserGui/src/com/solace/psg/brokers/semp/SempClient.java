@@ -184,6 +184,7 @@ public class SempClient {
 		String urlToUse = this.fullUrl + resource;
 		logger.info("SEMP DELETE Request - Resource Path: " + resource);
 		logger.info("SEMP DELETE Request - Full URL: " + urlToUse);
+		logger.info("SEMP DELETE Request - Username: " + this.user);
 		try {
 			HttpClient.delete(urlToUse, user, pw);
 			logger.info("SEMP DELETE Request Successful - Path: " + resource);
@@ -231,12 +232,13 @@ public class SempClient {
 				urlToUse = urlToUse.replace("config", "monitor");
 			}
 
-			logger.info("SEMP Request - Full URL: " + urlToUse);
-			logger.info("SEMP Request - Resource Path: " + resource);
-			logger.info("SEMP Request - API Endpoint: " + apiEndpoint);
-			System.out.println("SEMP Request - Full URL: " + urlToUse);
-			System.out.println("SEMP Request - Resource Path: " + resource);
-			logger.debug("Using admin creds" + this.user + "/" + this.pw);
+		logger.info("SEMP Request - Full URL: " + urlToUse);
+		logger.info("SEMP Request - Resource Path: " + resource);
+		logger.info("SEMP Request - API Endpoint: " + apiEndpoint);
+		logger.info("SEMP Request - Username: " + this.user);
+		System.out.println("SEMP Request - Full URL: " + urlToUse);
+		System.out.println("SEMP Request - Resource Path: " + resource);
+		System.out.println("SEMP Request - Username: " + this.user);
 
 			try {
 				if (verifyHostnameOnSllHandshake == true) {
@@ -816,12 +818,13 @@ public class SempClient {
 	public String postVpnObject(String resource, String body) throws SempException {
 		String responseText = "";
 		try {
-			String url = this.fullUrl + resource;
-			logger.info("SEMP POST Request - Resource Path: " + resource);
-			logger.info("SEMP POST Request - Full URL: " + url);
-			logger.debug("SEMP POST Request Body: " + body);
-			responseText = HttpClient.postWithBody(url, this.user, this.pw, body, HttpClient.JSON);
-			logger.info("SEMP POST Request Successful - Path: " + resource + ", Response length: " + (responseText != null ? responseText.length() : 0) + " chars");
+		String url = this.fullUrl + resource;
+		logger.info("SEMP POST Request - Resource Path: " + resource);
+		logger.info("SEMP POST Request - Full URL: " + url);
+		logger.info("SEMP POST Request - Username: " + this.user);
+		logger.debug("SEMP POST Request Body: " + body);
+		responseText = HttpClient.postWithBody(url, this.user, this.pw, body, HttpClient.JSON);
+		logger.info("SEMP POST Request Successful - Path: " + resource + ", Response length: " + (responseText != null ? responseText.length() : 0) + " chars");
 		} catch (IOException e) {
 			logger.error("SEMP POST Request Failed - Path: " + resource, e);
 			parseException(e);
@@ -833,6 +836,7 @@ public class SempClient {
 		String responseText = "";
 		try {
 			logger.info("SEMP POST Request - Full URL: " + fullUrl);
+			logger.info("SEMP POST Request - Username: " + this.user);
 			logger.debug("SEMP POST Request Body: " + body);
 			responseText = HttpClient.postWithBody(fullUrl, this.user, this.pw, body, HttpClient.JSON);
 			logger.info("SEMP POST Request Successful - Full URL: " + fullUrl + ", Response length: " + (responseText != null ? responseText.length() : 0) + " chars");
@@ -847,6 +851,7 @@ public class SempClient {
 		String jsonBody = toJson(bodyMap);
 		String thisUrl = this.fullUrl + resource;
 		logger.info("SEMP PUT Request - Resource Path: " + resource);
+		logger.info("SEMP PUT Request - Username: " + this.user);
 		return this.putVpnObjectFullUrl(thisUrl, jsonBody);
 	}
 
@@ -854,6 +859,7 @@ public class SempClient {
 		String jsonBody = toJson(bodyMap);
 		String thisUrl = this.fullUrl + resource;
 		logger.info("SEMP PATCH Request - Resource Path: " + resource);
+		logger.info("SEMP PATCH Request - Username: " + this.user);
 		return this.patchVpnObjectFullUrl(thisUrl, jsonBody);
 	}
 
@@ -861,6 +867,7 @@ public class SempClient {
 		String responseText = "";
 		try {
 			logger.info("SEMP PATCH Request - Full URL: " + fullUrl);
+			logger.info("SEMP PATCH Request - Username: " + this.user);
 			logger.debug("SEMP PATCH Request Body: " + body);
 			responseText = HttpClient.patchWithBody(fullUrl, this.user, this.pw, body, HttpClient.JSON);
 			logger.info("SEMP PATCH Request Successful - Full URL: " + fullUrl + ", Response length: " + (responseText != null ? responseText.length() : 0) + " chars");

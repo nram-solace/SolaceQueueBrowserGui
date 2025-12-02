@@ -37,6 +37,7 @@ public class QueueActionWindow extends JPanel {
 	private String srcQlabelTitle;
 	private String tarQName;
 	private Config config;
+	private Exception encounteredError = null;  // Track any exceptions during processing
 	
 	public QueueActionWindow(JFrame parentFrame, Broker broker, eAction action, SempClient sempV2ActionClient, SempClient sempV2MonitorClient, 
 			String msgVpnName, String queueName, String destQnameName, Config config) throws BrokerException {
@@ -207,9 +208,20 @@ public class QueueActionWindow extends JPanel {
 							// all done
 							break;
 						}
-					} catch (BrokerException e) {
-						// TODO Auto-generated catch block
+					} catch (SempException e) {
+						// SEMP authorization or other API errors
+						System.err.println("SEMP Exception during " + eActionSelected + " operation: " + e.getMessage());
 						e.printStackTrace();
+						encounteredError = e;
+						cancelled = true;  // Stop processing on SEMP errors
+						break;  // Exit the loop immediately
+					} catch (BrokerException e) {
+						// Other broker exceptions
+						System.err.println("Broker Exception during " + eActionSelected + " operation: " + e.getMessage());
+						e.printStackTrace();
+						encounteredError = e;
+						cancelled = true;  // Stop processing on broker errors
+						break;  // Exit the loop immediately
 					}
                 }
                 return null;
@@ -222,12 +234,15 @@ public class QueueActionWindow extends JPanel {
 
             @Override
             protected void done() {
-                if (isCancelled() || cancelled) {
+                frame.dispose();
+                
+                if (encounteredError != null) {
+                    // Show error dialog for exceptions
+                    showErrorDialog(encounteredError);
+                } else if (isCancelled() || cancelled) {
                     System.out.println("Task was canceled.");
-                    frame.dispose();
                 } else {
-                    frame.dispose();
-                    // Show completion status popup
+                    // Show completion status popup only if no errors
                     showCompletionStatus();
                 }
             }
@@ -251,6 +266,36 @@ public class QueueActionWindow extends JPanel {
 			statusMessage,
 			"Operation Complete",
 			JOptionPane.INFORMATION_MESSAGE);
+	}
+	
+	private void showErrorDialog(Exception error) {
+		String actionName = "";
+		if (eActionSelected == eAction.eCopy) {
+			actionName = "Copy All";
+		} else if (eActionSelected == eAction.eMove) {
+			actionName = "Move All";
+		} else if (eActionSelected == eAction.eDelete) {
+			actionName = "Delete All";
+		}
+		
+		String errorMessage = error.getMessage();
+		
+		// Extract more user-friendly message for SEMP authorization errors
+		if (error instanceof SempException) {
+			if (errorMessage.contains("UNAUTHORIZED") || errorMessage.contains("Authorization Access Level")) {
+				errorMessage = "Authorization Error: The SEMP user does not have permission to perform this operation.\n\n" +
+					"Details: " + errorMessage + "\n\n" +
+					"Note: Copy and Move operations require write access via SEMP credentials.\n" +
+					"Please use a SEMP management user with appropriate permissions.";
+			}
+		}
+		
+		String fullMessage = actionName + " operation failed after processing " + msgsProcessed + " of " + totalMsgCount + " messages.\n\n" + errorMessage;
+		
+		JOptionPane.showMessageDialog(parentFrame, 
+			fullMessage,
+			actionName + " Failed",
+			JOptionPane.ERROR_MESSAGE);
 	}
 
 	private String getProgressLabelText() {

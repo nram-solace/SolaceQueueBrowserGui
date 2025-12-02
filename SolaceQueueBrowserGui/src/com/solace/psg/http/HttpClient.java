@@ -259,11 +259,11 @@ public class HttpClient {
 		Builder builder = new Request.Builder();
 		builder.url(anyURL);
 		builder.addHeader("Authorization", Credentials.basic(username, password));
-		logger.debug("call on " + anyURL + " uses " + username + "/" + password);
+		logger.info("HTTP Request - URL: " + anyURL + ", Username: " + username);
 		return builder;
 	}
 	private static String doDelete(OkHttpClient httpClient, String anyURL, String username, String password) throws IOException {
-		logger.info("DELETE on " + anyURL);
+		logger.info("HTTP DELETE Request - URL: " + anyURL + ", Username: " + username);
 		Builder builder = builderFactory(anyURL, username, password);
 		builder.delete();
 		return execute(builder);
@@ -271,7 +271,7 @@ public class HttpClient {
 
 	private static String doPost(OkHttpClient httpClient, String anyURL, String body, String contentType, String username, String password)
 			throws IOException {
-		logger.info("POST to " + anyURL);
+		logger.info("HTTP POST Request - URL: " + anyURL + ", Username: " + username);
 
 		//String host = hostAndPostPrimaryKey(anyURL);
 		//logger.info("^^ that host is " + host);
@@ -286,7 +286,7 @@ public class HttpClient {
 
 	private static String doPatch(OkHttpClient httpClient, String anyURL, String body, String contentType, String username, String password)
 			throws IOException {
-		logger.info("PATCH to " + anyURL);
+		logger.info("HTTP PATCH Request - URL: " + anyURL + ", Username: " + username);
 		MediaType ty = MediaType.parse(contentType);
 		RequestBody bodyObj = RequestBody.create(ty, body);
 
@@ -296,7 +296,7 @@ public class HttpClient {
 	}
 	private static String doPut(OkHttpClient httpClient, String anyURL, String body, String contentType, String username, String password)
 			throws IOException {
-		logger.info("PUT to " + anyURL);
+		logger.info("HTTP PUT Request - URL: " + anyURL + ", Username: " + username);
 		MediaType ty = MediaType.parse(contentType);
 		RequestBody bodyObj = RequestBody.create(ty, body);
 
@@ -305,12 +305,11 @@ public class HttpClient {
 		return execute(builder);
 	}
 	private static String doGet(OkHttpClient httpClient, String anyURL, String username, String password) throws IOException {
-		logger.info("HttpClient.doGet() called - URL: " + anyURL);
-		logger.info("GET from " + anyURL);
+		logger.info("HTTP GET Request - URL: " + anyURL + ", Username: " + username);
 		Builder builder = builderFactory(anyURL, username, password);
 		builder.get();
 		String result = execute(builder);
-		logger.info("HttpClient.doGet() completed - URL: " + anyURL + ", Response length: " + (result != null ? result.length() : 0) + " chars");
+		logger.info("HTTP GET Response - URL: " + anyURL + ", Response length: " + (result != null ? result.length() : 0) + " chars");
 		return result;
 	}
 }
