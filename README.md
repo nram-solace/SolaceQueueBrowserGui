@@ -1,7 +1,7 @@
 ![Project Logo](./img/logo.png "SolaceQueueBrowserGui 2.0 Logo")
 
 # SolaceQueueBrowserGui 2.0
-v2.5.2 - Dec 02, 2025
+v2.5.4 - Dec 02, 2025
 
 Desktop GUI for browsing Solace Queues and managing messages.
 

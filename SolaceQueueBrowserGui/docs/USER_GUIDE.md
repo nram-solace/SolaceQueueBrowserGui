@@ -1,19 +1,20 @@
 ![Project Logo](./img/logo.png "Queue Browser Logo")
 # SolaceQueueBrowserGui 2.0 - User Guide and Reference Manual
-v2.5.2 - Dec 02, 2025
+v2.5.4 - Dec 02, 2025
 
 ## Table of Contents
 
 1. [Introduction](#introduction)
 2. [Installation and Setup](#installation-and-setup)
 3. [Configuration](#configuration)
-4. [Main Window](#main-window)
-5. [Message Browser](#message-browser)
-6. [Operations](#operations)
-7. [Filtering and Sorting](#filtering-and-sorting)
-8. [Password Encryption](#password-encryption)
-9. [Troubleshooting](#troubleshooting)
-10. [Reference](#reference)
+4. [Permissions and Access Control](#permissions-and-access-control)
+5. [Main Window](#main-window)
+6. [Message Browser](#message-browser)
+7. [Operations](#operations)
+8. [Filtering and Sorting](#filtering-and-sorting)
+9. [Password Encryption](#password-encryption)
+10. [Troubleshooting](#troubleshooting)
+11. [Reference](#reference)
 
 ---
 
@@ -299,6 +300,240 @@ User configuration files contain broker connection information. This file suppor
 
 See `../config/sample-config.json` for a sample configuration file with multiple broker entries. Copy this file to `config/default.json` and update it with your specific broker connection details.
 
+---
+
+## Permissions and Access Control
+
+The Queue Browser GUI uses **two different sets of credentials** for different operations:
+
+#### 1. SEMP Credentials (Administrative Operations)
+- **Configuration Fields:** `sempAdminUser` and `sempAdminPw`
+- **Protocol:** HTTP/REST (SEMP v2 API)
+- **Used For:**
+  - Listing and monitoring queues
+  - Copying messages between queues
+  - Moving messages (copy portion)
+  - Administrative operations
+
+#### 2. Messaging Client Credentials (Message Operations)
+- **Configuration Fields:** `messagingClientUsername` and `messagingPw`
+- **Protocol:** JCSMP/SMF (Solace Messaging Format)
+- **Used For:**
+  - Browsing message content
+  - Deleting messages (via acknowledge)
+  - Moving messages (delete portion)
+  - Restoring messages (publishing)
+
+**Important:** Both credential sets are required. 
+
+---
+
+### Operation Protocols and Permissions Reference
+
+The following table shows which protocol and credentials each operation uses:
+
+| Operation | Protocol | Credentials Used | Required SEMP Access | Required Client Permissions | Required Queue Permission |
+|-----------|----------|------------------|----------------------|----------------------------|---------------------------|
+| **List Queues** | SEMP (HTTP) | `sempAdminUser` | read-only | N/A | N/A |
+| **Browse Messages** | SMF (JCSMP) | `messagingClientUsername` | N/A | `allow-guaranteed-message-receive-enabled` | Read-Only or higher |
+| **Download Messages** | SMF (JCSMP) | `messagingClientUsername` | N/A | `allow-guaranteed-message-receive-enabled` | Read-Only or higher |
+| **Copy Messages** | SEMP (HTTP) | `sempAdminUser` | read-write or admin | `allow-guaranteed-message-receive-enabled` (to read source) | Modify or higher (on destination) |
+| **Delete Messages** | SMF (JCSMP) | `messagingClientUsername` | N/A | `allow-guaranteed-message-receive-enabled` + consume | Modify or higher |
+| **Move Messages** | SEMP + SMF | Both credentials | read-write or admin (for copy) | `allow-guaranteed-message-receive-enabled` + consume | Modify or higher (both queues) |
+| **Restore Messages** | SMF (JCSMP) | `messagingClientUsername` | N/A | `allow-guaranteed-message-send-enabled` | Modify or higher |
+
+---
+
+**⚠️ CRITICAL:** For true read-only access, set queue's **Others Permission** to **Read-Only** (not Modify or higher). Even with client profile set to receive-only, if the queue's Others Permission is set to Modify or higher, users can still delete messages by acknowledging them.
+
+**Why:** Queue browsing uses the JCSMP Guaranteed Messaging API. Creating a browser flow requires this permission even for read-only browsing (without consuming messages).
+
+**To enforce true read-only access:**
+1. Set client profile to receive-only
+2. **AND** set queue permission: `permission others read-only`
+
+This prevents message deletion even if the client profile allows it.
+
+---
+
+### Permission Matrix
+
+Complete matrix of features and their requirements:
+
+| Feature | SEMP Access Level | Guaranteed Receive | Guaranteed Send | Queue Others Permission | Notes |
+|---------|-------------------|-------------------|-----------------|-------------------------|-------|
+| Browse Messages | read-only | ✅ Required | ❌ | Read-Only or higher | Cannot browse without receive |
+| Download Messages | read-only | ✅ Required | ❌ | Read-Only or higher | Browsing + file write |
+| Delete Message | read-only | ✅ Required | ❌ | **Modify or higher** | Via msg.ackMessage() |
+| Delete All | read-only | ✅ Required | ❌ | **Modify or higher** | Bulk consume operation |
+| Copy Message | **read-write or admin** | ✅ (to read) | ❌ | Modify on destination | SEMP Action API |
+| Move Message | **read-write or admin** | ✅ Required | ❌ | **Modify on both queues** | Copy via SEMP + Delete via SMF |
+| Restore Message | read-only | ✅ Required | ✅ Required | Modify or higher | Publishes to queue |
+
+---
+
+### Common Permission Errors
+
+#### Error 503: Service Unavailable [Subcode:50]
+
+**Error Message:**
+```
+JCSMP error while creating browser for queue 'QueueName': 503: Service Unavailable
+```
+
+**Cause:** Messaging client does not have `allow-guaranteed-message-receive-enabled` permission.
+
+**Solution:** Enable guaranteed message receive in the client profile
+
+---
+
+#### Error 400: UNAUTHORIZED - Command prohibited
+
+**Error Message:**
+```
+Error 400 (subcode=72, status=UNAUTHORIZED) Problem with copyMsgFromQueue: 
+Command prohibited due to Authorization Access Level.
+```
+
+**Cause:** SEMP user has read-only access level, but copy/move operations require write access.
+
+**Solution:** Enable global or VPN level write/admin permission.
+---
+
+#### Access Denied - no permission to remove
+
+**Error Message:**
+```
+Access Denied - no permission to remove
+```
+
+**Cause:** Either:
+1. Messaging client doesn't have consume permission (part of guaranteed receive)
+2. Queue's Others Permission is set to Read-Only (prevents delete)
+
+**Solution:** Check Client Profile and/or Queue owner and Other permissions
+
+---
+
+### Recommended Configuration by Use Case
+
+#### Use Case 1: Operations Team (Read-Only Monitoring)
+**Goal:** View messages without ability to delete or modify
+
+**Configuration:**
+```json
+{
+    "name": "Production Monitor",
+    "sempAdminUser": "readonly-semp",
+    "messagingClientUsername": "monitor-client"
+}
+```
+
+**Broker Setup:**
+- SEMP user: `global-access-level read-only`
+- Client profile: `allow-guaranteed-message-receive-enabled` only
+- Queue permission: `permission others read-only` ⚠️ **Critical for true read-only!**
+
+**Capabilities:**
+- ✅ Browse and download messages
+- ❌ Cannot delete, copy, move, or restore
+
+---
+
+#### Use Case 2: Support Team (Browse and Manage)
+**Goal:** View, delete, copy, and move messages (no restore)
+
+**Configuration:**
+```json
+{
+    "name": "Support Access",
+    "sempAdminUser": "support-admin",
+    "messagingClientUsername": "support-client"
+}
+```
+
+**Broker Setup:**
+- SEMP user: `global-access-level read-write` or `admin`
+- Client profile: `allow-guaranteed-message-receive-enabled` only
+- Queue permission: `permission others modify`
+
+**Capabilities:**
+- ✅ Browse, delete, copy, move, and download messages
+- ❌ Cannot restore (no send permission)
+
+---
+
+#### Use Case 3: Development/Test (Full Access)
+**Goal:** All operations including message restoration
+
+**Configuration:**
+```json
+{
+    "name": "Dev Environment",
+    "sempAdminUser": "admin",
+    "messagingClientUsername": "dev-client"
+}
+```
+
+**Broker Setup:**
+- SEMP user: `global-access-level admin`
+- Client profile: Both `allow-guaranteed-message-receive-enabled` AND `allow-guaranteed-message-send-enabled`
+- Queue permission: `permission others modify` or `delete`
+
+**Capabilities:**
+- ✅ All operations (browse, delete, copy, move, restore, download)
+---
+
+### Security Best Practices
+
+1. **Use Principle of Least Privilege:**
+   - Give users only the minimum permissions needed for their role
+   - Use read-only SEMP users for monitoring
+   - Restrict queue-level permissions appropriately
+
+2. **Separate Credentials by Environment:**
+   - Use different credentials for production vs development
+   - Production: More restrictive permissions
+   - Development: Broader permissions for testing
+
+3. **Set Queue-Level Permissions:**
+   - Don't rely solely on client profile settings
+   - Set `permission others read-only` on critical queues to prevent accidental deletion
+   - Use `permission all` for more restrictive access control
+
+4. **Encrypt Passwords:**
+   - Use the password encryption feature for all configuration files
+   - Never commit plain-text passwords to version control
+   - See [Password Encryption](#password-encryption) section for details
+
+5. **Monitor Access:**
+   - Review SEMP logs regularly for unauthorized access attempts
+   - Application logs all operations including username used
+   - Check for failed authorization attempts
+
+---
+
+### Troubleshooting Permission Issues
+
+#### "I have a read-only SEMP user but can still delete messages"
+
+**Explanation:** This is expected behavior! Message deletion uses messaging client credentials (NOT SEMP credentials). Delete operations bypass SEMP and use the JCSMP connection with `messagingClientUsername`.
+
+**To truly restrict deletions:**
+1. Set queue permission: `permission others read-only`
+2. Or create a read-only messaging client profile (but this prevents browsing too due to JCSMP limitations)
+
+#### "I cannot browse any queues (Error 503)"
+
+**Cause:** Your messaging client profile does not have `allow-guaranteed-message-receive-enabled`.
+
+**Solution:** Enable guaranteed receive on the client profile (see configuration examples above).
+
+#### "Copy/Move operations fail with UNAUTHORIZED error"
+
+**Cause:** Your SEMP user has `read-only` access level. Copy and Move operations require write access via SEMP Action API.
+
+**Solution:** Grant `read-write` or `admin` access level to your SEMP user.
 ---
 
 ## Main Window
