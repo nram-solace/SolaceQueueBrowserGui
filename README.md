@@ -11,7 +11,7 @@ Desktop GUI for browsing Solace Queues and managing messages.
 
 SolaceQueueBrowserGui 2.0 is a desktop application that provides a comprehensive interface for browsing, inspecting, and managing messages in Solace queues.
 
-Please see **[User Guide](./docs/USER_GUIDE.md)** for detailed instructions, configuration examples, command-line options, troubleshooting, and additional information.
+Please see **[User Guide](./docs/USER_GUIDE.md)** under docs for detailed instructions, configuration examples, command-line options, troubleshooting, and additional information.
 
 ### Key Features
 
@@ -22,6 +22,7 @@ Please see **[User Guide](./docs/USER_GUIDE.md)** for detailed instructions, con
   - Filter by queue type (Exclusive, Non-Exclusive, Partitioned, Last Value Queue)
   - Filter by category (User, System, All)
   - Sort by name, spool size, spool usage, or usage percentage
+  - View topic subscriptions for selected queues (configurable display limit)
 - **Message browsing** - Paginated message browser with detailed inspection
   - View message headers, user properties, and payload
   - Payload format selection (Plain, JSON, YAML, CSV)

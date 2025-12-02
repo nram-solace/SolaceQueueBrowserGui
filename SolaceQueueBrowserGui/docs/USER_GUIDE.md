@@ -350,6 +350,35 @@ Located on the right side, displays detailed information for the selected queue:
 - Spool usage details
 - Access type
 - Partition information (if applicable)
+- Topic subscriptions (count and list of subscriptions)
+
+**Topic Subscriptions Display:**
+
+When you select a queue, the details panel automatically fetches and displays the topic subscriptions configured for that queue:
+
+- Shows the total count of subscriptions
+- Lists up to N subscriptions (configurable via `maxTopicSubscriptionsToDisplay` in `config/system.json`)
+- If there are more subscriptions than the display limit, shows "N more subscriptions..." indicator
+- Example display:
+  ```
+  Topic Subscriptions: 12 subscriptions
+    • topic/level1/level2
+    • topic/level1/level3
+    • topic/level1/level4
+    • topic/level1/level5
+    • topic/level1/level6
+    ... 7 more subscriptions ...
+  ```
+
+To configure the number of subscriptions displayed, edit `config/system.json`:
+
+```json
+{
+  "maxTopicSubscriptionsToDisplay": 20
+}
+```
+
+The default value is 10. Set to 0 to show only the count without listing any subscriptions.
 
 
 #### Action Buttons
@@ -853,6 +882,7 @@ Existing installations using the legacy single-config format continue to work:
 {
   "version": "string (optional, default: v2.1.3)",
   "downloadFolder": "string (optional, default: ./downloads)",
+  "maxTopicSubscriptionsToDisplay": "integer (optional, default: 5) - Maximum number of topic subscriptions to display in queue details",
   "ui": {
     "profile": "string (optional: 'Clean', 'Modern', 'Dark', or 'auto', default: 'Modern')",
     "profiles": {
