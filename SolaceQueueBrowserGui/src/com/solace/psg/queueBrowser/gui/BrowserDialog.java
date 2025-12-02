@@ -819,6 +819,54 @@ public class BrowserDialog implements IDragDropInstigator {
 		dialog.setLocationRelativeTo(parentFrame);
 		dialog.setLocation(parentFrame.getLocation().x + 10, parentFrame.getLocation().y + 10);
 
+		// Try to prefetch first page to check for partitioned queue error
+		// This prevents opening the dialog window if browsing is not supported
+		logBoth("*** run: Attempting initial prefetch to check for partitioned queue ***");
+		try {
+			semaphore.acquire();
+			browser.prefetchNextPage(); // Try to prefetch the first page
+			semaphore.release();
+			logBoth("*** run: Successfully prefetched first page, queue is browsable ***");
+		} catch (BrokerException e) {
+			semaphore.release();
+			if (e.getMessage() != null && e.getMessage().contains("Browsing Not Supported on Partitioned Queue")) {
+				// Show error on parent frame and return without opening dialog
+				logBoth("*** run: Partitioned queue detected, showing error on parent frame ***");
+				JOptionPane.showMessageDialog(parentFrame, 
+					"Browsing is not supported on Partitioned Queues",
+					"Browsing Not Supported",
+					JOptionPane.WARNING_MESSAGE);
+				return; // Don't show the dialog
+			} else {
+				// Other broker errors - show error on parent frame and return
+				logBoth("*** run: BrokerException during initial prefetch: " + e.getMessage() + " ***");
+				String errorMsg = buildDetailedErrorMessage("Failed to browse queue", e);
+				JOptionPane.showMessageDialog(parentFrame, 
+					errorMsg,
+					"Error Browsing Queue",
+					JOptionPane.ERROR_MESSAGE);
+				return; // Don't show the dialog
+			}
+		} catch (InterruptedException e) {
+			semaphore.release();
+			logBoth("*** run: InterruptedException during initial prefetch: " + e.getMessage() + " ***");
+			String errorMsg = "Interrupted while browsing queue";
+			JOptionPane.showMessageDialog(parentFrame, 
+				errorMsg,
+				"Error Browsing Queue",
+				JOptionPane.ERROR_MESSAGE);
+			return; // Don't show the dialog
+		} catch (Exception e) {
+			semaphore.release();
+			logBoth("*** run: Exception during initial prefetch: " + e.getMessage() + " ***");
+			String errorMsg = buildDetailedErrorMessage("Failed to browse queue", e);
+			JOptionPane.showMessageDialog(parentFrame, 
+				errorMsg,
+				"Error Browsing Queue",
+				JOptionPane.ERROR_MESSAGE);
+			return; // Don't show the dialog
+		}
+
 		// Make the dialog visible
 		// dialog.setVisible(true);
 
@@ -836,7 +884,7 @@ public class BrowserDialog implements IDragDropInstigator {
 				
 				// Use the exact same pattern as restartAfterFilter
 				tableModel.setRowCount(0);
-				preFetch();
+				// Don't call preFetch() here since we already prefetched above for partitioned queue check
 				nCurPage = 0;
 				onNextPage(dialog, tableModel, nextPageButton); // Match restartAfterFilter exactly
 				
@@ -1732,7 +1780,7 @@ public class BrowserDialog implements IDragDropInstigator {
 		} catch (BrokerException e) {
 			if (e.getMessage() != null && e.getMessage().contains("Browsing Not Supported on Partitioned Queue")) {
 				if (! cantBrowseWarningIssuedAlready) {
-					JOptionPane.showMessageDialog(this.dialog, "That queue is a partitioned queue. Browsing is not supported on Partitioned Queues");
+					JOptionPane.showMessageDialog(this.dialog, "Browsing is not supported on Partitioned Queues");
 					cantBrowseWarningIssuedAlready = true;
 				}
 			} else {

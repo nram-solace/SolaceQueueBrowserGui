@@ -1731,10 +1731,7 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
              }
              
              if (fieldName.equals("partitionCount")) {
-            	 int val = Integer.parseInt(value.toString());
-            	 if (val > 0) {
-            		 strValue += " - CANNOT browse"; 
-            	 }
+            	 int val = Integer.parseInt(value.toString());	
              }
              
              int largeFontSize = thisCfg != null ? thisCfg.largeFontSize : 20;
