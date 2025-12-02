@@ -25,6 +25,8 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Semaphore;
 import java.util.zip.ZipEntry;
@@ -1028,6 +1030,9 @@ public class BrowserDialog implements IDragDropInstigator {
 		
 		ArrayList<String> successfulIds = new ArrayList<String>();
 		ArrayList<String> failedIds = new ArrayList<String>();
+		Map<String, String> failureReasons = new HashMap<String, String>();  // messageId -> error message
+		boolean abortedDueToPermissions = false;
+		int skippedCount = 0;
 		
 		if (ids.size() > 1) {
 			System.out.println("on" + (deleteFromSource ? "Move" : "Copy") + ": Processing " + ids.size() + " messages");
@@ -1040,8 +1045,28 @@ public class BrowserDialog implements IDragDropInstigator {
 					System.out.println("on" + (deleteFromSource ? "Move" : "Copy") + ": Successfully " + action + "ed messageId=" + id);
 				} catch (Exception e) {
 					failedIds.add(id);
-					System.out.println("on" + (deleteFromSource ? "Move" : "Copy") + ": Failed to " + action + " messageId=" + id + ", error=" + e.getMessage());
+					String errorMsg = e.getMessage();
+					failureReasons.put(id, errorMsg);
+					System.out.println("on" + (deleteFromSource ? "Move" : "Copy") + ": Failed to " + action + " messageId=" + id + ", error=" + errorMsg);
 					logger.error("Failed to " + action + " message " + id, e);
+					
+					// Check if this is a fatal permission/authorization error
+					if (errorMsg != null && (
+						errorMsg.contains("Access Denied") || 
+						errorMsg.contains("no permission") ||
+						errorMsg.contains("UNAUTHORIZED") ||
+						errorMsg.contains("Permission denied") ||
+						errorMsg.contains("not authorized") ||
+						errorMsg.contains("Authorization Access Level"))) {
+						
+						// Calculate how many messages we're skipping
+						skippedCount = ids.size() - failedIds.size() - successfulIds.size();
+						if (skippedCount > 0) {
+							abortedDueToPermissions = true;
+							logger.warn("Aborting " + action + " operation after first permission error. Skipping " + skippedCount + " remaining messages.");
+							break;  // Stop processing remaining messages
+						}
+					}
 				}
 			}
 			action = deleteFromSource ? "moved" : "copied";
@@ -1053,12 +1078,46 @@ public class BrowserDialog implements IDragDropInstigator {
 				message = successfulIds.size() + " message" + (successfulIds.size() == 1 ? "" : "s") + 
 					" successfully " + action + " to queue '" + selectedTargetQueue + "'.";
 			} else {
-				message = successfulIds.size() + " message" + (successfulIds.size() == 1 ? "" : "s") + 
-					" successfully " + action + " to queue '" + selectedTargetQueue + "'.\n" +
-					failedIds.size() + " message" + (failedIds.size() == 1 ? "" : "s") + " failed.";
+				// Build detailed error message with failure reasons
+				StringBuilder messageBuilder = new StringBuilder();
+				messageBuilder.append(successfulIds.size()).append(" message").append(successfulIds.size() == 1 ? "" : "s")
+					.append(" successfully ").append(action).append(" to queue '").append(selectedTargetQueue).append("'.\n\n");
+				messageBuilder.append(failedIds.size()).append(" message").append(failedIds.size() == 1 ? "" : "s")
+					.append(" failed:\n\n");
+				
+				// Add details for each failed message (limit to first 5 to avoid huge dialogs)
+				int displayCount = Math.min(failedIds.size(), 5);
+				for (int i = 0; i < displayCount; i++) {
+					String failedId = failedIds.get(i);
+					String reason = failureReasons.get(failedId);
+					messageBuilder.append("• Message ").append(failedId).append(": ");
+					if (reason != null && !reason.isEmpty()) {
+						// Shorten very long error messages
+						if (reason.length() > 100) {
+							messageBuilder.append(reason.substring(0, 100)).append("...");
+						} else {
+							messageBuilder.append(reason);
+						}
+					} else {
+						messageBuilder.append("Unknown error");
+					}
+					messageBuilder.append("\n");
+				}
+				
+				if (failedIds.size() > 5) {
+					messageBuilder.append("\n... and ").append(failedIds.size() - 5).append(" more");
+				}
+				
+				// Add abort notification if operation was stopped early
+				if (abortedDueToPermissions && skippedCount > 0) {
+					messageBuilder.append("\n\n⚠️ Operation aborted after first permission error.\n");
+					//messageBuilder.append("Skipped ").append(skippedCount).append(" remaining messages.");
+				}
+				
+				message = messageBuilder.toString();
 			}
 			JOptionPane.showMessageDialog(dialog, message, 
-				"Operation Complete", JOptionPane.INFORMATION_MESSAGE);
+				"Operation Complete", failedIds.isEmpty() ? JOptionPane.INFORMATION_MESSAGE : JOptionPane.WARNING_MESSAGE);
 			
 			setStatus(ids.size() + " messages were " + action+ " to " + selectedTargetQueue);
 
@@ -1233,6 +1292,9 @@ public class BrowserDialog implements IDragDropInstigator {
 		
 		ArrayList<String> successfulIds = new ArrayList<String>();
 		ArrayList<String> failedIds = new ArrayList<String>();
+		Map<String, String> failureReasons = new HashMap<String, String>();  // messageId -> error message
+		boolean abortedDueToPermissions = false;
+		int skippedCount = 0;
 		
 		if (ids.size() > 1) {
 			System.out.println("onDownload: Processing " + ids.size() + " messages");
@@ -1245,8 +1307,27 @@ public class BrowserDialog implements IDragDropInstigator {
 					System.out.println("onDownload: Successfully downloaded messageId=" + id);
 				} catch (Exception e) {
 					failedIds.add(id);
-					System.out.println("onDownload: Failed to download messageId=" + id + ", error=" + e.getMessage());
+					String errorMsg = e.getMessage();
+					failureReasons.put(id, errorMsg);
+					System.out.println("onDownload: Failed to download messageId=" + id + ", error=" + errorMsg);
 					logger.error("Failed to download message " + id, e);
+					
+					// Check if this is a fatal permission/authorization error
+					if (errorMsg != null && (
+						errorMsg.contains("Access Denied") || 
+						errorMsg.contains("no permission") ||
+						errorMsg.contains("UNAUTHORIZED") ||
+						errorMsg.contains("Permission denied") ||
+						errorMsg.contains("not authorized"))) {
+						
+						// Calculate how many messages we're skipping
+						skippedCount = ids.size() - failedIds.size() - successfulIds.size();
+						if (skippedCount > 0) {
+							abortedDueToPermissions = true;
+							logger.warn("Aborting download operation after first permission error. Skipping " + skippedCount + " remaining messages.");
+							break;  // Stop processing remaining messages
+						}
+					}
 				}
 			}
 			
@@ -1265,12 +1346,46 @@ public class BrowserDialog implements IDragDropInstigator {
 				message = successfulIds.size() + " message" + (successfulIds.size() == 1 ? "" : "s") + 
 					" successfully downloaded to:\n" + downloadPath;
 			} else {
-				message = successfulIds.size() + " message" + (successfulIds.size() == 1 ? "" : "s") + 
-					" successfully downloaded to:\n" + downloadPath + "\n\n" +
-					failedIds.size() + " message" + (failedIds.size() == 1 ? "" : "s") + " failed.";
+				// Build detailed error message with failure reasons
+				StringBuilder messageBuilder = new StringBuilder();
+				messageBuilder.append(successfulIds.size()).append(" message").append(successfulIds.size() == 1 ? "" : "s")
+					.append(" successfully downloaded to:\n").append(downloadPath).append("\n\n");
+				messageBuilder.append(failedIds.size()).append(" message").append(failedIds.size() == 1 ? "" : "s")
+					.append(" failed:\n\n");
+				
+				// Add details for each failed message (limit to first 5 to avoid huge dialogs)
+				int displayCount = Math.min(failedIds.size(), 5);
+				for (int i = 0; i < displayCount; i++) {
+					String failedId = failedIds.get(i);
+					String reason = failureReasons.get(failedId);
+					messageBuilder.append("• Message ").append(failedId).append(": ");
+					if (reason != null && !reason.isEmpty()) {
+						// Shorten very long error messages
+						if (reason.length() > 100) {
+							messageBuilder.append(reason.substring(0, 100)).append("...");
+						} else {
+							messageBuilder.append(reason);
+						}
+					} else {
+						messageBuilder.append("Unknown error");
+					}
+					messageBuilder.append("\n");
+				}
+				
+				if (failedIds.size() > 5) {
+					messageBuilder.append("\n... and ").append(failedIds.size() - 5).append(" more");
+				}
+				
+				// Add abort notification if operation was stopped early
+				if (abortedDueToPermissions && skippedCount > 0) {
+					messageBuilder.append("\n\n⚠️ Operation aborted after first permission error.\n");
+					messageBuilder.append("Skipped ").append(skippedCount).append(" remaining message");
+				}
+				
+				message = messageBuilder.toString();
 			}
 			JOptionPane.showMessageDialog(dialog, message, 
-				"Download Complete", JOptionPane.INFORMATION_MESSAGE);
+				"Download Complete", failedIds.isEmpty() ? JOptionPane.INFORMATION_MESSAGE : JOptionPane.WARNING_MESSAGE);
 			
 			setStatus(ids.size() + " messages were downloaded to " + downloadPath);
 			
@@ -1452,6 +1567,10 @@ public class BrowserDialog implements IDragDropInstigator {
     		ArrayList<String> ids = new ArrayList<String>();
     		ArrayList<String> successfulIds = new ArrayList<String>();
     		ArrayList<String> failedIds = new ArrayList<String>();
+    		Map<String, String> failureReasons = new HashMap<String, String>();  // messageId -> error message
+    		boolean abortedDueToPermissions = false;
+    		int skippedCount = 0;
+    		int totalMessages = allSelectedRowNumbers.size();  // Total count before loop starts
     		
         	for (Integer i : allSelectedRowNumbers) {
         		String id = (String) table.getValueAt(i, nIdColumn);
@@ -1463,7 +1582,27 @@ public class BrowserDialog implements IDragDropInstigator {
         			successfulIds.add(id);
         		} catch (Exception e) {
         			failedIds.add(id);
+        			String errorMsg = e.getMessage();
+        			failureReasons.put(id, errorMsg);
         			logger.error("Failed to delete message " + id, e);
+        			
+        			// Check if this is a fatal permission/authorization error
+        			// If so, abort remaining operations as they'll all fail the same way
+        			if (errorMsg != null && (
+        				errorMsg.contains("Access Denied") || 
+        				errorMsg.contains("no permission") ||
+        				errorMsg.contains("UNAUTHORIZED") ||
+        				errorMsg.contains("Permission denied") ||
+        				errorMsg.contains("not authorized"))) {
+        				
+        				// Calculate how many messages we're skipping
+        				skippedCount = totalMessages - failedIds.size() - successfulIds.size();
+        				if (skippedCount > 0) {
+        					abortedDueToPermissions = true;
+        					logger.warn("Aborting delete operation after first permission error. Skipping " + skippedCount + " remaining messages.");
+        					break;  // Stop processing remaining messages
+        				}
+        			}
         		}
         	}
         	
@@ -1528,9 +1667,43 @@ public class BrowserDialog implements IDragDropInstigator {
         		JOptionPane.showMessageDialog(dialog, message, 
         			"Deletion Complete", JOptionPane.INFORMATION_MESSAGE);
         	} else {
-        		message = successfulIds.size() + " message" + (successfulIds.size() == 1 ? "" : "s") + 
-        			" successfully deleted from queue '" + this.queue + "'.\n" +
-        			failedIds.size() + " message" + (failedIds.size() == 1 ? "" : "s") + " failed to delete.";
+        		// Build detailed error message with failure reasons
+        		StringBuilder messageBuilder = new StringBuilder();
+        		messageBuilder.append(successfulIds.size()).append(" message").append(successfulIds.size() == 1 ? "" : "s")
+        			.append(" successfully deleted from queue '").append(this.queue).append("'.\n\n");
+        		messageBuilder.append(failedIds.size()).append(" message").append(failedIds.size() == 1 ? "" : "s")
+        			.append(" failed to delete:\n\n");
+        		
+        		// Add details for each failed message (limit to first 5 to avoid huge dialogs)
+        		int displayCount = Math.min(failedIds.size(), 5);
+        		for (int i = 0; i < displayCount; i++) {
+        			String failedId = failedIds.get(i);
+        			String reason = failureReasons.get(failedId);
+        			messageBuilder.append("• Message ").append(failedId).append(": ");
+        			if (reason != null && !reason.isEmpty()) {
+        				// Shorten very long error messages
+        				if (reason.length() > 100) {
+        					messageBuilder.append(reason.substring(0, 100)).append("...");
+        				} else {
+        					messageBuilder.append(reason);
+        				}
+        			} else {
+        				messageBuilder.append("Unknown error");
+        			}
+        			messageBuilder.append("\n");
+        		}
+        		
+        		if (failedIds.size() > 5) {
+        			messageBuilder.append("\n... and ").append(failedIds.size() - 5).append(" more");
+        		}
+        		
+        		// Add abort notification if operation was stopped early
+        		if (abortedDueToPermissions && skippedCount > 0) {
+        			messageBuilder.append("\n\n⚠️ Operation aborted after first permission error.\n");
+        			messageBuilder.append("Skipped ").append(skippedCount).append(" remaining message");
+        		}
+        		
+        		message = messageBuilder.toString();
         		JOptionPane.showMessageDialog(dialog, message, 
         			"Deletion Complete", JOptionPane.WARNING_MESSAGE);
         	}

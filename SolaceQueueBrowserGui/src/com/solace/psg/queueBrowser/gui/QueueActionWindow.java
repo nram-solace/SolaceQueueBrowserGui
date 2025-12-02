@@ -216,11 +216,18 @@ public class QueueActionWindow extends JPanel {
 						cancelled = true;  // Stop processing on SEMP errors
 						break;  // Exit the loop immediately
 					} catch (BrokerException e) {
-						// Other broker exceptions
+						// Other broker exceptions (JCSMP errors like AccessDeniedException)
 						System.err.println("Broker Exception during " + eActionSelected + " operation: " + e.getMessage());
 						e.printStackTrace();
 						encounteredError = e;
 						cancelled = true;  // Stop processing on broker errors
+						break;  // Exit the loop immediately
+					} catch (Exception e) {
+						// Catch any other exceptions (e.g., JCSMPException from msg.ackMessage())
+						System.err.println("Exception during " + eActionSelected + " operation: " + e.getMessage());
+						e.printStackTrace();
+						encounteredError = e;
+						cancelled = true;  // Stop processing on any error
 						break;  // Exit the loop immediately
 					}
                 }
@@ -280,7 +287,7 @@ public class QueueActionWindow extends JPanel {
 		
 		String errorMessage = error.getMessage();
 		
-		// Extract more user-friendly message for SEMP authorization errors
+		// Extract more user-friendly message for authorization errors
 		if (error instanceof SempException) {
 			if (errorMessage.contains("UNAUTHORIZED") || errorMessage.contains("Authorization Access Level")) {
 				errorMessage = "Authorization Error: The SEMP user does not have permission to perform this operation.\n\n" +
@@ -288,6 +295,13 @@ public class QueueActionWindow extends JPanel {
 					"Note: Copy and Move operations require write access via SEMP credentials.\n" +
 					"Please use a SEMP management user with appropriate permissions.";
 			}
+		} else if (errorMessage != null && (
+			errorMessage.contains("Access Denied") || 
+			errorMessage.contains("no permission") ||
+			errorMessage.contains("not authorized"))) {
+			// Handle JCSMP permission errors (e.g., delete without consume permission)
+			errorMessage = "Permission Error: The messaging client does not have permission to perform this operation.\n\n" +
+				"Details: " + errorMessage + "\n\n";
 		}
 		
 		String fullMessage = actionName + " operation failed after processing " + msgsProcessed + " of " + totalMsgCount + " messages.\n\n" + errorMessage;
