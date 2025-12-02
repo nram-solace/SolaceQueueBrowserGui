@@ -138,6 +138,7 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 	}
 	
 	private String masterPasswordFromCommandLine = null;
+	private String uiProfileFromCommandLine = null;
 	
 	public QueueBrowserMainWindow(String configFile) throws BrokerException {
 		this.configFile = configFile;
@@ -149,6 +150,13 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 		this.masterPasswordFromCommandLine = masterPasswordFromCommandLine;
 		this.initialize();
 	}
+	
+	public QueueBrowserMainWindow(String configFile, String masterPasswordFromCommandLine, String uiProfileFromCommandLine) throws BrokerException {
+		this.configFile = configFile;
+		this.masterPasswordFromCommandLine = masterPasswordFromCommandLine;
+		this.uiProfileFromCommandLine = uiProfileFromCommandLine;
+		this.initialize();
+	}
 
 	private void initialize() throws BrokerException {
 		logger.info("========================================");
@@ -156,6 +164,11 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 		logger.info("========================================");
 		
 		thisCfg = new Config(this.configFile);
+		
+		// Set command-line profile override if provided
+		if (uiProfileFromCommandLine != null) {
+			thisCfg.setCommandLineProfileOverride(uiProfileFromCommandLine);
+		}
 		
 		// Check if config has encrypted passwords and prompt for master password if needed
 		handleMasterPassword();
@@ -523,9 +536,10 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 			table.setRowHeight(33);
 			table.setFillsViewportHeight(true);
 			// Set font for table cells to match queue details panel
-			String tableFontFamily = (thisCfg.fontFamily != null && !thisCfg.fontFamily.isEmpty()) ? thisCfg.fontFamily : "Serif";
-			table.setFont(new Font(tableFontFamily, Font.PLAIN, 16));
-			table.getTableHeader().setFont(new Font(tableFontFamily, Font.PLAIN, 16));
+			String tableFontFamily = (thisCfg.fontFamily != null && !thisCfg.fontFamily.isEmpty()) ? thisCfg.fontFamily : Font.SANS_SERIF;
+			int tableFontSize = thisCfg != null ? thisCfg.tableFontSize : 16;
+			table.setFont(new Font(tableFontFamily, Font.PLAIN, tableFontSize));
+			table.getTableHeader().setFont(new Font(tableFontFamily, Font.PLAIN, tableFontSize));
 			table.setDefaultRenderer(Object.class, new AlternatingRowColorRenderer(thisCfg));
 			table.getColumnModel().getColumn(0).setCellRenderer(iconCellRenderer);
 			table.getColumnModel().getColumn(0).setMaxWidth(48);
@@ -621,7 +635,8 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 			// Use system default font for better cross-platform appearance (especially on Windows)
 			// Falls back to SansSerif if config font is not set, which looks more natural than Serif
 			String detailsFontFamily = (thisCfg.fontFamily != null && !thisCfg.fontFamily.isEmpty()) ? thisCfg.fontFamily : Font.SANS_SERIF;
-			detailsLabel.setFont(new Font(detailsFontFamily, Font.PLAIN, 14)); // Changed from ITALIC to PLAIN, reduced size slightly
+			int detailsFontSize = thisCfg != null ? thisCfg.defaultFontSize : 14;
+			detailsLabel.setFont(new Font(detailsFontFamily, Font.PLAIN, detailsFontSize)); // Changed from ITALIC to PLAIN, reduced size slightly
 			
 			// Initialize with empty text - will be populated when queue is selected
 			detailsLabel.setText("");
@@ -644,7 +659,7 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 
 			buttonPanel = new JPanel();
 			buttonPanel.setLayout(new BorderLayout());
-			browseButton = new JButton("Browse");
+			browseButton = new JButton(thisCfg != null ? thisCfg.formatButtonText("⌕", "Browse") : "Browse");
 			browseButton.setEnabled(false);
 			browseButton.setBackground(thisCfg != null ? thisCfg.buttonFilter : new Color(240, 230, 255)); // Soft purple background
 			browseButton.setForeground(thisCfg != null ? thisCfg.buttonFilterForeground : Color.BLACK);
@@ -697,7 +712,7 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 				}
 			});
 
-			copyAllButton = new JButton("Copy ALL");
+			copyAllButton = new JButton(thisCfg != null ? thisCfg.formatButtonText("⎘", "Copy ALL") : "Copy ALL");
 			copyAllButton.setEnabled(false);
 			copyAllButton.setBackground(thisCfg != null ? thisCfg.buttonCopy : new Color(220, 235, 255)); // Soft blue background
 			copyAllButton.setForeground(thisCfg != null ? thisCfg.buttonCopyForeground : Color.BLACK);
@@ -708,7 +723,7 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 				}
 			});
 
-			moveAllButton = new JButton("Move ALL");
+			moveAllButton = new JButton(thisCfg != null ? thisCfg.formatButtonText("➜", "Move ALL") : "Move ALL");
 			moveAllButton.setEnabled(false);
 			moveAllButton.setBackground(thisCfg != null ? thisCfg.buttonMove : new Color(255, 245, 220)); // Soft yellow background
 			moveAllButton.setForeground(thisCfg != null ? thisCfg.buttonMoveForeground : Color.BLACK);
@@ -719,7 +734,7 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 				}
 			});
 
-			deleteAllButton = new JButton("Delete ALL");
+			deleteAllButton = new JButton(thisCfg != null ? thisCfg.formatButtonText("✕", "Delete ALL") : "Delete ALL");
 			deleteAllButton.setEnabled(false);
 			deleteAllButton.setBackground(thisCfg != null ? thisCfg.buttonDelete : new Color(255, 220, 220)); // Soft red background
 			deleteAllButton.setForeground(thisCfg != null ? thisCfg.buttonDeleteForeground : Color.BLACK);
@@ -731,7 +746,7 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 
 			});
 
-			restoreButton = new JButton("Restore");
+			restoreButton = new JButton(thisCfg != null ? thisCfg.formatButtonText("⎌", "Restore") : "Restore");
 			restoreButton.setEnabled(false);
 			restoreButton.setBackground(thisCfg != null ? thisCfg.buttonRestore : new Color(220, 255, 220)); // Soft green background
 			restoreButton.setForeground(thisCfg != null ? thisCfg.buttonRestoreForeground : Color.BLACK);
@@ -752,7 +767,7 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 				}
 			});
 
-			refreshButton = new JButton("Refresh");
+			refreshButton = new JButton(thisCfg != null ? thisCfg.formatButtonText("↻", "Refresh") : "Refresh");
 			refreshButton.setEnabled(true);
 			refreshButton.setBackground(thisCfg != null ? thisCfg.buttonRefresh : new Color(220, 245, 255)); // Soft cyan background
 			refreshButton.setForeground(thisCfg != null ? thisCfg.buttonRefreshForeground : Color.BLACK);
@@ -764,9 +779,10 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 			});
 
 			// Create Exit button with soft red background
-			String headerFontFamily = (thisCfg.fontFamily != null && !thisCfg.fontFamily.isEmpty()) ? thisCfg.fontFamily : (thisCfg != null ? thisCfg.defaultFontFamilyFallback : "Serif");
+			// Use same font as queue details panel for consistency
+			String headerFontFamily = (thisCfg.fontFamily != null && !thisCfg.fontFamily.isEmpty()) ? thisCfg.fontFamily : Font.SANS_SERIF;
 			int buttonFontSize = thisCfg != null ? thisCfg.buttonFontSize : 14;
-			exitButton = new JButton("Exit");
+			exitButton = new JButton(thisCfg != null ? thisCfg.formatButtonText("⊗", "Exit") : "Exit");
 			exitButton.setBackground(thisCfg != null ? thisCfg.buttonExit : new Color(220, 150, 150)); // Very soft red
 			exitButton.setForeground(thisCfg != null ? thisCfg.buttonExitForeground : Color.WHITE);
 			exitButton.setFont(new Font(headerFontFamily, Font.BOLD, buttonFontSize));
@@ -2291,6 +2307,10 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 		// Load config to get version (without master password for now)
 		Config tempCfg = new Config(parser.configFileProvided);
 		try {
+			// Set command-line profile override if provided
+			if (parser.uiProfileProvided != null) {
+				tempCfg.setCommandLineProfileOverride(parser.uiProfileProvided);
+			}
 			// Check if encrypted passwords exist before loading
 			boolean hasEncrypted = tempCfg.hasEncryptedPasswords();
 			if (hasEncrypted && parser.masterPasswordProvided != null) {
@@ -2315,7 +2335,7 @@ public class QueueBrowserMainWindow implements IDragDropTarget {
 		logger.info("*** VERIFICATION: This is v2.1.1 with password encryption support ***");
 		logger.info("Configuration File: " + parser.configFileProvided);
 
-		QueueBrowserMainWindow me = new QueueBrowserMainWindow(parser.configFileProvided, parser.masterPasswordProvided);
+		QueueBrowserMainWindow me = new QueueBrowserMainWindow(parser.configFileProvided, parser.masterPasswordProvided, parser.uiProfileProvided);
 		me.run();
 	}
 }

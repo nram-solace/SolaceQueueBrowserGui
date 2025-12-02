@@ -15,6 +15,7 @@ cd /d "%~dp0\.."
 REM Parse command line arguments
 set CONFIG_FILE=
 set MASTER_PASSWORD=
+set UI_PROFILE=
 set SHOW_HELP=0
 
 :parse_args
@@ -39,6 +40,18 @@ if /i "%~1"=="-mp" (
 )
 if /i "%~1"=="--master-password" (
     set MASTER_PASSWORD=%~2
+    shift
+    shift
+    goto parse_args
+)
+if /i "%~1"=="-up" (
+    set UI_PROFILE=%~2
+    shift
+    shift
+    goto parse_args
+)
+if /i "%~1"=="--ui-profile" (
+    set UI_PROFILE=%~2
     shift
     shift
     goto parse_args
@@ -73,6 +86,7 @@ echo.
 echo Options:
 echo   -c, --config FILE              Configuration file (default: config/default.json)
 echo   -mp, --master-password PWD     Master password for decrypting encrypted passwords
+echo   -up, --ui-profile PROFILE      UI profile to use (Clean, Modern, Dark). Overrides config file setting
 echo   -h, --help                      Show this help message
 echo.
 echo Examples:
@@ -84,6 +98,9 @@ echo   %~nx0 -c config/local-dev.json
 echo.
 echo   # Run with master password (for encrypted passwords):
 echo   %~nx0 -c config/default.json --master-password "myMasterKey"
+echo.
+echo   # Run with UI profile override:
+echo   %~nx0 -c config/default.json --ui-profile Dark
 echo.
 echo Note: Create config/default.json by copying config/sample-config.json and
 echo       updating it with your specific broker connection details.
@@ -141,14 +158,24 @@ echo    Config: %CONFIG_FILE%
 if not "%MASTER_PASSWORD%"=="" (
     echo    Master Password: [provided]
 )
+if not "%UI_PROFILE%"=="" (
+    echo    UI Profile: %UI_PROFILE%
+)
 echo.
 
 REM Build Java command arguments
+set JAVA_CMD=java -jar "%JAR_FILE%" -c "%CONFIG_FILE%"
+
+REM Add master password if provided
 if not "%MASTER_PASSWORD%"=="" (
-    REM Run the application with master password
-    java -jar "%JAR_FILE%" -c "%CONFIG_FILE%" --master-password "%MASTER_PASSWORD%"
-) else (
-    REM Run the application without master password
-    java -jar "%JAR_FILE%" -c "%CONFIG_FILE%"
+    set JAVA_CMD=!JAVA_CMD! --master-password "%MASTER_PASSWORD%"
 )
+
+REM Add UI profile if provided
+if not "%UI_PROFILE%"=="" (
+    set JAVA_CMD=!JAVA_CMD! --ui-profile "%UI_PROFILE%"
+)
+
+REM Run the application
+!JAVA_CMD!
 

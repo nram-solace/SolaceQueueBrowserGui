@@ -1,7 +1,137 @@
 {
-	"version": "v2.3.7",
+	"version": "v2.4.0",
 	"downloadFolder": "./downloads",
 	"ui": {
+		"profile": "Modern",
+		"profiles": {
+			"Clean": {
+				"description": "macOS-optimized clean and minimal design",
+				"font": {
+					"fontFamily": null,
+					"defaultFontFamilyFallback": "SF Pro Display",
+					"defaultFontSize": 13,
+					"headerFontSize": 15,
+					"labelFontSize": 15,
+					"buttonFontSize": 13,
+					"tableFontSize": 13,
+					"smallFontSize": 10,
+					"largeFontSize": 18,
+					"statusFontSize": 20,
+					"textAreaFontFamily": "SF Mono",
+					"textAreaFontSize": 11
+				},
+				"colors": {
+					"rowEvenBackground": [250, 250, 250],
+					"rowOddBackground": [255, 255, 255],
+					"rowSelectedBackground": [200, 220, 255],
+					"rowForeground": [0, 0, 0],
+					"rowSelectedForeground": [0, 0, 0],
+					"textForeground": [0, 0, 0],
+					"gridColor": [230, 230, 230],
+					"buttonRefresh": [240, 248, 255],
+					"buttonRefreshForeground": [0, 0, 0],
+					"buttonFilter": [245, 240, 255],
+					"buttonFilterForeground": [0, 0, 0],
+					"buttonNavigation": [240, 248, 255],
+					"buttonNavigationForeground": [0, 0, 0],
+					"buttonDelete": [255, 235, 235],
+					"buttonDeleteForeground": [200, 0, 0],
+					"buttonCopy": [235, 245, 255],
+					"buttonCopyForeground": [0, 0, 0],
+					"buttonMove": [255, 250, 235],
+					"buttonMoveForeground": [0, 0, 0],
+					"buttonRestore": [235, 255, 235],
+					"buttonRestoreForeground": [0, 100, 0],
+					"buttonExit": [255, 200, 200],
+					"buttonExitForeground": [150, 0, 0]
+				}
+			},
+			"Modern": {
+				"description": "Windows-optimized modern design",
+				"buttonTextIcons": true,
+				"font": {
+					"fontFamily": null,
+					"defaultFontFamilyFallback": "SansSerif",
+					"defaultFontSize": 14,
+					"headerFontSize": 16,
+					"labelFontSize": 16,
+					"buttonFontSize": 14,
+					"tableFontSize": 16,
+					"smallFontSize": 11,
+					"largeFontSize": 20,
+					"statusFontSize": 22,
+					"textAreaFontFamily": "Consolas",
+					"textAreaFontSize": 12
+				},
+				"colors": {
+					"rowEvenBackground": [248, 248, 248],
+					"rowOddBackground": [255, 255, 255],
+					"rowSelectedBackground": [180, 210, 255],
+					"rowForeground": [0, 0, 0],
+					"rowSelectedForeground": [0, 0, 0],
+					"textForeground": [0, 0, 0],
+					"gridColor": [240, 240, 240],
+					"buttonRefresh": [220, 245, 255],
+					"buttonRefreshForeground": [0, 0, 0],
+					"buttonFilter": [240, 230, 255],
+					"buttonFilterForeground": [0, 0, 0],
+					"buttonNavigation": [230, 240, 255],
+					"buttonNavigationForeground": [0, 0, 0],
+					"buttonDelete": [255, 220, 220],
+					"buttonDeleteForeground": [200, 0, 0],
+					"buttonCopy": [220, 235, 255],
+					"buttonCopyForeground": [0, 0, 0],
+					"buttonMove": [255, 245, 220],
+					"buttonMoveForeground": [0, 0, 0],
+					"buttonRestore": [220, 255, 220],
+					"buttonRestoreForeground": [0, 100, 0],
+					"buttonExit": [220, 150, 150],
+					"buttonExitForeground": [255, 255, 255]
+				}
+			},
+			"Dark": {
+				"description": "Dark theme for all platforms",
+				"font": {
+					"fontFamily": null,
+					"defaultFontFamilyFallback": "System",
+					"defaultFontSize": 14,
+					"headerFontSize": 16,
+					"labelFontSize": 16,
+					"buttonFontSize": 14,
+					"tableFontSize": 14,
+					"smallFontSize": 11,
+					"largeFontSize": 20,
+					"statusFontSize": 22,
+					"textAreaFontFamily": "Monospaced",
+					"textAreaFontSize": 12
+				},
+				"colors": {
+					"rowEvenBackground": [40, 40, 40],
+					"rowOddBackground": [30, 30, 30],
+					"rowSelectedBackground": [60, 80, 120],
+					"rowForeground": [220, 220, 220],
+					"rowSelectedForeground": [255, 255, 255],
+					"textForeground": [220, 220, 220],
+					"gridColor": [60, 60, 60],
+					"buttonRefresh": [50, 70, 90],
+					"buttonRefreshForeground": [220, 220, 220],
+					"buttonFilter": [70, 60, 90],
+					"buttonFilterForeground": [220, 220, 220],
+					"buttonNavigation": [60, 70, 90],
+					"buttonNavigationForeground": [220, 220, 220],
+					"buttonDelete": [90, 50, 50],
+					"buttonDeleteForeground": [255, 180, 180],
+					"buttonCopy": [50, 60, 90],
+					"buttonCopyForeground": [220, 220, 220],
+					"buttonMove": [90, 80, 50],
+					"buttonMoveForeground": [255, 255, 220],
+					"buttonRestore": [50, 90, 50],
+					"buttonRestoreForeground": [180, 255, 180],
+					"buttonExit": [90, 50, 50],
+					"buttonExitForeground": [255, 200, 200]
+				}
+			}
+		},
 		"font": {
 			"fontFamily": null,
 			"defaultFontFamilyFallback": "Serif",
@@ -9,10 +139,12 @@
 			"headerFontSize": 16,
 			"labelFontSize": 16,
 			"buttonFontSize": 14,
-			"tableFontSize": 14,
+			"tableFontSize": 16,
 			"smallFontSize": 11,
 			"largeFontSize": 20,
-			"statusFontSize": 22
+			"statusFontSize": 22,
+			"textAreaFontFamily": "Monospaced",
+			"textAreaFontSize": 12
 		},
 		"colors": {
 			"rowEvenBackground": [248, 248, 248],
@@ -41,4 +173,3 @@
 		}
 	}
 }
-

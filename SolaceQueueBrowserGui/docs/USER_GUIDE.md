@@ -109,10 +109,11 @@ java -jar SolaceQueueBrowserGui-VERSION-jar-with-dependencies.jar -c config/defa
 
 - `-c, --config FILE`: Specify configuration file path (required)
 - `-mp, --master-password PWD`: Provide master password for encrypted passwords (optional)
+- `-up, --ui-profile PROFILE`: Override UI profile (Clean, Modern, Dark) (optional)
 - `-h, --help`: Display help information
 
 ```bash
-./scripts/run.sh -c config/default.json --master-password "MASTER-PASSWORD"
+./scripts/run.sh -c config/default.json --master-password "MASTER-PASSWORD" --ui-profile Dark
 ==================================================
 Starting SolaceQueueBrowserGui
 ==================================================
@@ -121,6 +122,7 @@ Starting SolaceQueueBrowserGui
    JAR: SolaceQueueBrowserGui-v2.3.0-jar-with-dependencies.jar
    Config: config/default.json
    Master Password: [provided]
+   UI Profile: Dark
 ```
 
 **Note:** Replace `config/default.json` with your own configuration file name if you created a custom one.
@@ -710,12 +712,16 @@ Opens when clicking "Filter" button in message browser.
 **Symptoms**:
 - Text clipped or not displaying
 - Fonts not rendering correctly
+- Profile not found error
 
 **Solutions**:
 - Check UI configuration in config file
 - Verify font family is available on your system
 - Set `fontFamily` to `null` to use system defaults
 - Check log files for font-related errors
+- Verify profile name is correct (case-sensitive: "Clean", "Modern", "Dark")
+- If using command-line override, ensure profile exists in `profiles` section
+- Check that `profiles` section exists in `config/system.json` if using profile-based config
 
 
 ### Performance Issues
@@ -732,11 +738,142 @@ Opens when clicking "Filter" button in message browser.
 
 ---
 
+## UI Profiles
+
+The application supports multiple UI profiles for different platforms and themes. Profiles allow you to customize fonts, colors, and other UI elements to match your platform or preference.
+
+### Available Profiles
+
+1. **Clean** - macOS-optimized clean and minimal design
+   - Softer, more subtle colors
+   - SF Pro Display/SF Mono fonts
+   - Smaller font sizes (13px default)
+
+2. **Modern** - Windows-optimized modern design (default)
+   - Slightly bolder colors
+   - Segoe UI/Consolas fonts
+   - Standard font sizes (14-16px)
+
+3. **Dark** - Dark theme for all platforms
+   - Dark backgrounds (30-40 RGB range)
+   - Light text (220-255 RGB range)
+   - Good contrast ratios for accessibility
+
+### Selecting a Profile
+
+#### Method 1: Configuration File
+
+Edit `config/system.json` and set the `"profile"` field in the `"ui"` section:
+
+```json
+{
+  "ui": {
+    "profile": "Dark"
+  }
+}
+```
+
+Valid values: `"Clean"`, `"Modern"`, `"Dark"`, or `"auto"` (defaults to "Modern").
+
+#### Method 2: Command-Line Override
+
+Use the `--ui-profile` (or `-up`) command-line option to override the config file setting:
+
+```bash
+./scripts/run.sh -c config/default.json --ui-profile Dark
+```
+
+**Priority**: Command-line override > Config file setting > Default ("Modern")
+
+### Profile Selection Behavior
+
+- **Profile exists**: Loads font and color settings from the selected profile
+- **Profile not found**: Shows error message listing available profiles
+- **No profiles section**: Falls back to legacy single config format (if `font`/`colors` sections exist)
+- **No UI config**: Uses default values
+
+### Profile Validation
+
+The application validates profiles on startup:
+- Checks that the specified profile exists in the `profiles` section
+- Warns if profile is missing `font` or `colors` sections (uses defaults)
+- Lists available profiles in error messages if profile not found
+
+### Backward Compatibility
+
+Existing installations using the legacy single-config format continue to work:
+- If `profiles` section doesn't exist, uses `font`/`colors` sections
+- No breaking changes for existing configurations
+
+---
+
 ## Reference
 
 ### Configuration File Schema
 
 #### System Configuration Schema (`config/system.json`)
+
+**Profile-Based Configuration (Recommended)**:
+
+```json
+{
+  "version": "string (optional, default: v2.1.3)",
+  "downloadFolder": "string (optional, default: ./downloads)",
+  "ui": {
+    "profile": "string (optional: 'Clean', 'Modern', 'Dark', or 'auto', default: 'Modern')",
+    "profiles": {
+      "Clean": {
+        "description": "string (optional)",
+        "font": {
+          "fontFamily": "string | null (optional)",
+          "defaultFontFamilyFallback": "string (optional)",
+          "defaultFontSize": "integer (optional)",
+          "headerFontSize": "integer (optional)",
+          "labelFontSize": "integer (optional)",
+          "buttonFontSize": "integer (optional)",
+          "tableFontSize": "integer (optional)",
+          "smallFontSize": "integer (optional)",
+          "largeFontSize": "integer (optional)",
+          "statusFontSize": "integer (optional)",
+          "textAreaFontFamily": "string (optional)",
+          "textAreaFontSize": "integer (optional)"
+        },
+        "colors": {
+          "rowEvenBackground": [R, G, B],
+          "rowOddBackground": [R, G, B],
+          "rowSelectedBackground": [R, G, B],
+          "rowForeground": [R, G, B],
+          "rowSelectedForeground": [R, G, B],
+          "textForeground": [R, G, B],
+          "gridColor": [R, G, B],
+          "buttonRefresh": [R, G, B],
+          "buttonRefreshForeground": [R, G, B],
+          "buttonFilter": [R, G, B],
+          "buttonFilterForeground": [R, G, B],
+          "buttonNavigation": [R, G, B],
+          "buttonNavigationForeground": [R, G, B],
+          "buttonDelete": [R, G, B],
+          "buttonDeleteForeground": [R, G, B],
+          "buttonCopy": [R, G, B],
+          "buttonCopyForeground": [R, G, B],
+          "buttonMove": [R, G, B],
+          "buttonMoveForeground": [R, G, B],
+          "buttonRestore": [R, G, B],
+          "buttonRestoreForeground": [R, G, B],
+          "buttonExit": [R, G, B],
+          "buttonExitForeground": [R, G, B]
+        }
+      },
+      "Modern": { ... },
+      "Dark": { ... }
+    },
+    "font": { ... },
+    "colors": { ... }
+  }
+}
+```
+
+**Legacy Single Configuration (Backward Compatible)**:
 
 ```json
 {

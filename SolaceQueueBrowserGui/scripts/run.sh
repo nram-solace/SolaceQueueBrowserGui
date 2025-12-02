@@ -17,6 +17,7 @@ cd "$(dirname "$0")/.."
 # Parse command line arguments
 CONFIG_FILE=""
 MASTER_PASSWORD=""
+UI_PROFILE=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -29,6 +30,10 @@ while [[ $# -gt 0 ]]; do
             MASTER_PASSWORD="$2"
             shift 2
             ;;
+        -up|--ui-profile)
+            UI_PROFILE="$2"
+            shift 2
+            ;;
         --help|-h)
             echo ""
             echo "Usage: $0 [options]"
@@ -36,6 +41,7 @@ while [[ $# -gt 0 ]]; do
             echo "Options:"
             echo "  -c, --config FILE              Configuration file (default: config/default.json)"
             echo "  -mp, --master-password PWD     Master password for decrypting encrypted passwords"
+            echo "  -up, --ui-profile PROFILE      UI profile to use (Clean, Modern, Dark). Overrides config file setting"
             echo "  -h, --help                      Show this help message"
             echo ""
             echo "Examples:"
@@ -47,6 +53,9 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "  # Run with master password (for encrypted passwords):"
             echo "  $0 -c config/default.json --master-password \"myMasterKey\""
+            echo ""
+            echo "  # Run with UI profile override:"
+            echo "  $0 -c config/default.json --ui-profile Dark"
             echo ""
             echo "Note: Create config/default.json by copying config/sample-config.json and"
             echo "      updating it with your specific broker connection details."
@@ -109,6 +118,9 @@ echo "   Config: $CONFIG_FILE"
 if [ -n "$MASTER_PASSWORD" ]; then
     echo "   Master Password: [provided]"
 fi
+if [ -n "$UI_PROFILE" ]; then
+    echo "   UI Profile: $UI_PROFILE"
+fi
 echo ""
 
 # Build Java command arguments
@@ -117,6 +129,11 @@ JAVA_ARGS=("-jar" "$JAR_FILE" "-c" "$CONFIG_FILE")
 # Add master password if provided
 if [ -n "$MASTER_PASSWORD" ]; then
     JAVA_ARGS+=("--master-password" "$MASTER_PASSWORD")
+fi
+
+# Add UI profile if provided
+if [ -n "$UI_PROFILE" ]; then
+    JAVA_ARGS+=("--ui-profile" "$UI_PROFILE")
 fi
 
 # Run the application

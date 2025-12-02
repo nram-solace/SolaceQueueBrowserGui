@@ -14,7 +14,11 @@ import com.solace.psg.brokers.BrokerException;
 import com.solace.psg.util.FileUtils;
 import com.solace.psg.util.PasswordEncryption;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class Config {
+	private static final Logger logger = LoggerFactory.getLogger(Config.class.getName());
 	
 	private String configFile;
 	public List<Broker> brokers = new ArrayList<Broker>();
@@ -33,7 +37,12 @@ public class Config {
 	public int smallFontSize = 11;
 	public int largeFontSize = 20;
 	public int statusFontSize = 22;
+	public String textAreaFontFamily = "Monospaced";
+	public int textAreaFontSize = 12;
 	public String version = "v2.1.3";
+	public String selectedProfile = null; // Track which profile was loaded
+	private String commandLineProfileOverride = null; // Command-line profile override
+	public boolean buttonTextIcons = false; // Enable text icons in buttons (default false)
 	
 	// UI Colors - defaults matching current hardcoded values
 	public Color rowEvenBackground = new Color(248, 248, 248);
@@ -265,72 +274,23 @@ public class Config {
 			if (systemDoc.has("ui")) {
 				JSONObject uiConfig = systemDoc.getJSONObject("ui");
 				
-				// Load font configuration if present
-				if (uiConfig.has("font")) {
-					JSONObject fontConfig = uiConfig.getJSONObject("font");
-					if (fontConfig.has("fontFamily") && !fontConfig.isNull("fontFamily")) {
-						fontFamily = fontConfig.getString("fontFamily");
-					}
-					if (fontConfig.has("defaultFontFamilyFallback")) {
-						defaultFontFamilyFallback = fontConfig.getString("defaultFontFamilyFallback");
-					}
-					if (fontConfig.has("defaultFontSize")) {
-						defaultFontSize = fontConfig.getInt("defaultFontSize");
-					}
-					if (fontConfig.has("headerFontSize")) {
-						headerFontSize = fontConfig.getInt("headerFontSize");
-					}
-					if (fontConfig.has("labelFontSize")) {
-						labelFontSize = fontConfig.getInt("labelFontSize");
-					}
-					if (fontConfig.has("buttonFontSize")) {
-						buttonFontSize = fontConfig.getInt("buttonFontSize");
-					}
-					if (fontConfig.has("tableFontSize")) {
-						tableFontSize = fontConfig.getInt("tableFontSize");
-					}
-					if (fontConfig.has("smallFontSize")) {
-						smallFontSize = fontConfig.getInt("smallFontSize");
-					}
-					if (fontConfig.has("largeFontSize")) {
-						largeFontSize = fontConfig.getInt("largeFontSize");
-					}
-					if (fontConfig.has("statusFontSize")) {
-						statusFontSize = fontConfig.getInt("statusFontSize");
-					}
-				}
-				
-				// Load colors if present
-				if (uiConfig.has("colors")) {
-					JSONObject colorsConfig = uiConfig.getJSONObject("colors");
-					rowEvenBackground = loadColor(colorsConfig, "rowEvenBackground", rowEvenBackground);
-					rowOddBackground = loadColor(colorsConfig, "rowOddBackground", rowOddBackground);
-					rowSelectedBackground = loadColor(colorsConfig, "rowSelectedBackground", rowSelectedBackground);
-					rowForeground = loadColor(colorsConfig, "rowForeground", rowForeground);
-					rowSelectedForeground = loadColor(colorsConfig, "rowSelectedForeground", rowSelectedForeground);
-					textForeground = loadColor(colorsConfig, "textForeground", textForeground);
-					gridColor = loadColor(colorsConfig, "gridColor", gridColor);
-					buttonRefresh = loadColor(colorsConfig, "buttonRefresh", buttonRefresh);
-					buttonRefreshForeground = loadColor(colorsConfig, "buttonRefreshForeground", buttonRefreshForeground);
-					buttonFilter = loadColor(colorsConfig, "buttonFilter", buttonFilter);
-					buttonFilterForeground = loadColor(colorsConfig, "buttonFilterForeground", buttonFilterForeground);
-					buttonNavigation = loadColor(colorsConfig, "buttonNavigation", buttonNavigation);
-					buttonNavigationForeground = loadColor(colorsConfig, "buttonNavigationForeground", buttonNavigationForeground);
-					buttonDelete = loadColor(colorsConfig, "buttonDelete", buttonDelete);
-					buttonDeleteForeground = loadColor(colorsConfig, "buttonDeleteForeground", buttonDeleteForeground);
-					buttonCopy = loadColor(colorsConfig, "buttonCopy", buttonCopy);
-					buttonCopyForeground = loadColor(colorsConfig, "buttonCopyForeground", buttonCopyForeground);
-					buttonMove = loadColor(colorsConfig, "buttonMove", buttonMove);
-					buttonMoveForeground = loadColor(colorsConfig, "buttonMoveForeground", buttonMoveForeground);
-					buttonRestore = loadColor(colorsConfig, "buttonRestore", buttonRestore);
-					buttonRestoreForeground = loadColor(colorsConfig, "buttonRestoreForeground", buttonRestoreForeground);
-					buttonExit = loadColor(colorsConfig, "buttonExit", buttonExit);
-					buttonExitForeground = loadColor(colorsConfig, "buttonExitForeground", buttonExitForeground);
-				}
+				// Try to load from profile first, fallback to legacy config
+				loadUIProfile(uiConfig);
+			} else {
+				logger.info("UI Profile: No UI configuration found in system.json, using defaults");
+				System.out.println("UI Profile: No UI configuration found in system.json, using defaults");
 			}
 		} catch (JSONException e) {
 			throw new BrokerException("Failed to process system configuration file '" + systemConfigFile + "': " + e.getMessage());
 		}
+        
+        /* This code removed for V1 release
+         * 
+        if (doc.has("blackListedQueues") && doc.has("whiteListedQueues")) {
+        	throw new BrokerException("Invalid configuration. You cannot specify both a blacklist and a whitelist");
+        }
+        blackListedQueues = loadList(doc, "blackListedQueues");
+        whiteListedQueues = loadList(doc, "whiteListedQueues");
         
         /* This code removed for V1 release
          * 
@@ -493,5 +453,263 @@ public class Config {
 			// If parsing fails, return default value
 		}
 		return defaultValue;
+	}
+	
+	/**
+	 * Validate that a profile exists and has required sections
+	 * @param profiles Profiles object from config
+	 * @param profileName Name of profile to validate
+	 * @throws BrokerException if profile is invalid or missing required sections
+	 */
+	private void validateProfile(JSONObject profiles, String profileName) throws BrokerException {
+		if (!profiles.has(profileName)) {
+			// List available profiles for helpful error message
+			StringBuilder availableProfiles = new StringBuilder();
+			try {
+				java.util.Iterator<String> keys = profiles.keys();
+				while (keys.hasNext()) {
+					if (availableProfiles.length() > 0) {
+						availableProfiles.append(", ");
+					}
+					availableProfiles.append("'").append(keys.next()).append("'");
+				}
+			} catch (Exception e) {
+				availableProfiles.append("(unable to list)");
+			}
+			
+			throw new BrokerException(
+				"UI Profile '" + profileName + "' not found in system.json. " +
+				"Available profiles: " + (availableProfiles.length() > 0 ? availableProfiles.toString() : "none") + ". " +
+				"Please check the 'profiles' section in config/system.json or use a valid profile name."
+			);
+		}
+		
+		JSONObject profile = profiles.getJSONObject(profileName);
+		
+		// Validate required sections
+		if (!profile.has("font")) {
+			logger.warn("UI Profile '{}': Missing 'font' section, using defaults", profileName);
+		}
+		if (!profile.has("colors")) {
+			logger.warn("UI Profile '{}': Missing 'colors' section, using defaults", profileName);
+		}
+	}
+	
+	/**
+	 * Load UI profile from configuration
+	 * Supports both profile-based and legacy single config formats
+	 * @param uiConfig UI configuration object from system.json
+	 * @throws BrokerException if configuration is invalid
+	 */
+	private void loadUIProfile(JSONObject uiConfig) throws BrokerException {
+		try {
+			// Determine which profile to use
+			String profileName = determineProfile(uiConfig);
+			
+			// Try to load from profile first
+			if (uiConfig.has("profiles")) {
+				JSONObject profiles = uiConfig.getJSONObject("profiles");
+				
+				// Validate profile exists
+				validateProfile(profiles, profileName);
+				
+				JSONObject profile = profiles.getJSONObject(profileName);
+				selectedProfile = profileName;
+				
+				// Log profile selection
+				String description = profile.has("description") ? profile.getString("description") : "";
+				String logMessage = "UI Profile selected: '" + profileName + "'" + 
+					(description.isEmpty() ? "" : " - " + description);
+				if (commandLineProfileOverride != null) {
+					logMessage += " (via command-line override)";
+				}
+				logger.info(logMessage);
+				System.out.println("=================================================================");
+				System.out.println(logMessage);
+				System.out.println("=================================================================");
+				
+				// Load buttonTextIcons setting
+				if (profile.has("buttonTextIcons")) {
+					buttonTextIcons = profile.getBoolean("buttonTextIcons");
+				}
+				
+				// Load font and colors from profile
+				if (profile.has("font")) {
+					loadFontConfig(profile.getJSONObject("font"));
+				} else {
+					logger.warn("UI Profile '{}': No 'font' section found, using defaults", profileName);
+				}
+				if (profile.has("colors")) {
+					loadColorConfig(profile.getJSONObject("colors"));
+				} else {
+					logger.warn("UI Profile '{}': No 'colors' section found, using defaults", profileName);
+				}
+			} else if (uiConfig.has("font") && uiConfig.has("colors")) {
+				// Fallback to legacy single config format
+				// If command-line override was specified but profiles section doesn't exist, warn user
+				if (commandLineProfileOverride != null) {
+					logger.warn("UI Profile: Command-line override '{}' specified but 'profiles' section not found in system.json. Using legacy config format instead.", commandLineProfileOverride);
+				}
+				selectedProfile = "legacy";
+				String logMessage = "UI Profile: Using legacy single config format (no profiles section found)";
+				logger.info(logMessage);
+				System.out.println("=================================================================");
+				System.out.println(logMessage);
+				System.out.println("=================================================================");
+				loadFontConfig(uiConfig.getJSONObject("font"));
+				loadColorConfig(uiConfig.getJSONObject("colors"));
+			} else {
+				// No profile or legacy config found, use defaults
+				// If command-line override was specified but profiles section doesn't exist, warn user
+				if (commandLineProfileOverride != null) {
+					logger.warn("UI Profile: Command-line override '{}' specified but 'profiles' section not found in system.json. Using defaults instead.", commandLineProfileOverride);
+				}
+				selectedProfile = "default";
+				String logMessage = "UI Profile: Using default values (no profile or legacy config found)";
+				logger.info(logMessage);
+				System.out.println("=================================================================");
+				System.out.println(logMessage);
+				System.out.println("=================================================================");
+				// Defaults are already set in field declarations
+			}
+		} catch (JSONException e) {
+			throw new BrokerException("Failed to load UI profile: " + e.getMessage());
+		}
+	}
+	
+	/**
+	 * Set command-line profile override
+	 * @param profileName Profile name from command line (overrides config file setting)
+	 */
+	public void setCommandLineProfileOverride(String profileName) {
+		if (profileName != null && !profileName.trim().isEmpty()) {
+			commandLineProfileOverride = profileName.trim();
+			logger.info("UI Profile: Command-line override set to '{}'", commandLineProfileOverride);
+		}
+	}
+	
+	/**
+	 * Determine which profile to use based on configuration
+	 * Priority: 1. Command-line override, 2. Config file setting, 3. Default
+	 * @param uiConfig UI configuration object
+	 * @return Profile name to use
+	 */
+	private String determineProfile(JSONObject uiConfig) {
+		// Priority 1: Command-line override (highest priority)
+		if (commandLineProfileOverride != null && !commandLineProfileOverride.isEmpty()) {
+			logger.info("UI Profile: Using command-line override '{}'", commandLineProfileOverride);
+			return commandLineProfileOverride;
+		}
+		
+		// Priority 2: Config file setting
+		try {
+			if (uiConfig.has("profile")) {
+				String profile = uiConfig.getString("profile");
+				if (profile != null && !profile.isEmpty() && !profile.equals("auto")) {
+					logger.debug("UI Profile: Explicitly set to '{}'", profile);
+					return profile;
+				} else if (profile != null && profile.equals("auto")) {
+					logger.debug("UI Profile: Set to 'auto', using default profile");
+				}
+			}
+		} catch (JSONException e) {
+			// Ignore and use default
+			logger.warn("UI Profile: Error reading profile setting, using default: {}", e.getMessage());
+		}
+		
+		// Priority 3: Default profile
+		String defaultProfile = UIProfile.getDefaultProfile();
+		logger.debug("UI Profile: Using default profile '{}'", defaultProfile);
+		return defaultProfile;
+	}
+	
+	/**
+	 * Load font configuration from JSON
+	 * @param fontConfig Font configuration object
+	 */
+	private void loadFontConfig(JSONObject fontConfig) {
+		try {
+			if (fontConfig.has("fontFamily") && !fontConfig.isNull("fontFamily")) {
+				fontFamily = fontConfig.getString("fontFamily");
+			}
+			if (fontConfig.has("defaultFontFamilyFallback")) {
+				defaultFontFamilyFallback = fontConfig.getString("defaultFontFamilyFallback");
+			}
+			if (fontConfig.has("defaultFontSize")) {
+				defaultFontSize = fontConfig.getInt("defaultFontSize");
+			}
+			if (fontConfig.has("headerFontSize")) {
+				headerFontSize = fontConfig.getInt("headerFontSize");
+			}
+			if (fontConfig.has("labelFontSize")) {
+				labelFontSize = fontConfig.getInt("labelFontSize");
+			}
+			if (fontConfig.has("buttonFontSize")) {
+				buttonFontSize = fontConfig.getInt("buttonFontSize");
+			}
+			if (fontConfig.has("tableFontSize")) {
+				tableFontSize = fontConfig.getInt("tableFontSize");
+			}
+			if (fontConfig.has("smallFontSize")) {
+				smallFontSize = fontConfig.getInt("smallFontSize");
+			}
+			if (fontConfig.has("largeFontSize")) {
+				largeFontSize = fontConfig.getInt("largeFontSize");
+			}
+			if (fontConfig.has("statusFontSize")) {
+				statusFontSize = fontConfig.getInt("statusFontSize");
+			}
+			if (fontConfig.has("textAreaFontFamily")) {
+				textAreaFontFamily = fontConfig.getString("textAreaFontFamily");
+			}
+			if (fontConfig.has("textAreaFontSize")) {
+				textAreaFontSize = fontConfig.getInt("textAreaFontSize");
+			}
+		} catch (JSONException e) {
+			// If parsing fails, use defaults (already set in field declarations)
+		}
+	}
+	
+	/**
+	 * Load color configuration from JSON
+	 * @param colorsConfig Color configuration object
+	 */
+	private void loadColorConfig(JSONObject colorsConfig) {
+		rowEvenBackground = loadColor(colorsConfig, "rowEvenBackground", rowEvenBackground);
+		rowOddBackground = loadColor(colorsConfig, "rowOddBackground", rowOddBackground);
+		rowSelectedBackground = loadColor(colorsConfig, "rowSelectedBackground", rowSelectedBackground);
+		rowForeground = loadColor(colorsConfig, "rowForeground", rowForeground);
+		rowSelectedForeground = loadColor(colorsConfig, "rowSelectedForeground", rowSelectedForeground);
+		textForeground = loadColor(colorsConfig, "textForeground", textForeground);
+		gridColor = loadColor(colorsConfig, "gridColor", gridColor);
+		buttonRefresh = loadColor(colorsConfig, "buttonRefresh", buttonRefresh);
+		buttonRefreshForeground = loadColor(colorsConfig, "buttonRefreshForeground", buttonRefreshForeground);
+		buttonFilter = loadColor(colorsConfig, "buttonFilter", buttonFilter);
+		buttonFilterForeground = loadColor(colorsConfig, "buttonFilterForeground", buttonFilterForeground);
+		buttonNavigation = loadColor(colorsConfig, "buttonNavigation", buttonNavigation);
+		buttonNavigationForeground = loadColor(colorsConfig, "buttonNavigationForeground", buttonNavigationForeground);
+		buttonDelete = loadColor(colorsConfig, "buttonDelete", buttonDelete);
+		buttonDeleteForeground = loadColor(colorsConfig, "buttonDeleteForeground", buttonDeleteForeground);
+		buttonCopy = loadColor(colorsConfig, "buttonCopy", buttonCopy);
+		buttonCopyForeground = loadColor(colorsConfig, "buttonCopyForeground", buttonCopyForeground);
+		buttonMove = loadColor(colorsConfig, "buttonMove", buttonMove);
+		buttonMoveForeground = loadColor(colorsConfig, "buttonMoveForeground", buttonMoveForeground);
+		buttonRestore = loadColor(colorsConfig, "buttonRestore", buttonRestore);
+		buttonRestoreForeground = loadColor(colorsConfig, "buttonRestoreForeground", buttonRestoreForeground);
+		buttonExit = loadColor(colorsConfig, "buttonExit", buttonExit);
+		buttonExitForeground = loadColor(colorsConfig, "buttonExitForeground", buttonExitForeground);
+	}
+	
+	/**
+	 * Format button text with icon if buttonTextIcons is enabled
+	 * @param icon The Unicode icon character
+	 * @param text The button text
+	 * @return Formatted button text with icon prefix if enabled, otherwise just text
+	 */
+	public String formatButtonText(String icon, String text) {
+		if (buttonTextIcons && icon != null && !icon.isEmpty()) {
+			return icon + " " + text;
+		}
+		return text;
 	}
 }

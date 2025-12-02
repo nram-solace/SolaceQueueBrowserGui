@@ -273,7 +273,7 @@ public class BrowserDialog implements IDragDropInstigator {
 		// Create the top panel
 		JPanel topPanel = new JPanel(new BorderLayout());
 
-		JButton refreshTopButton = new JButton("Refresh");
+		JButton refreshTopButton = new JButton(config != null ? config.formatButtonText("↻", "Refresh") : "Refresh");
         refreshTopButton.setBackground(config != null ? config.buttonRefresh : new Color(220, 245, 255)); // Soft cyan background
         refreshTopButton.setForeground(config != null ? config.buttonRefreshForeground : Color.BLACK);
         refreshTopButton.addActionListener(new ActionListener() {
@@ -285,7 +285,7 @@ public class BrowserDialog implements IDragDropInstigator {
         
 
 		// Create filter button for top row
-		JButton filterTopButton = new JButton("Filter");
+		JButton filterTopButton = new JButton(config != null ? config.formatButtonText("▼", "Filter") : "Filter");
 		filterTopButton.setEnabled(true);
 		filterTopButton.setBackground(config != null ? config.buttonFilter : new Color(240, 230, 255)); // Soft purple background
 		filterTopButton.setForeground(config != null ? config.buttonFilterForeground : Color.BLACK);
@@ -589,7 +589,7 @@ public class BrowserDialog implements IDragDropInstigator {
 		listScrollPane.setPreferredSize(new Dimension(380, 400));
 		topPanel.add(listScrollPane, BorderLayout.CENTER);
 
-		delButton = new JButton("Delete");
+		delButton = new JButton(config != null ? config.formatButtonText("✕", "Delete") : "Delete");
 		delButton.setEnabled(false);
 		delButton.setBackground(config != null ? config.buttonDelete : new Color(255, 220, 220)); // Soft red background
 		delButton.setForeground(config != null ? config.buttonDeleteForeground : Color.BLACK);
@@ -620,7 +620,7 @@ public class BrowserDialog implements IDragDropInstigator {
 				onPreviousMessage();
 			}
 		});
-		copyMessageMsgButton = new JButton("Copy");
+		copyMessageMsgButton = new JButton(config != null ? config.formatButtonText("⎘", "Copy") : "Copy");
 		copyMessageMsgButton.setEnabled(false);
 		copyMessageMsgButton.setBackground(config != null ? config.buttonCopy : new Color(220, 235, 255)); // Soft blue background
 		copyMessageMsgButton.setForeground(config != null ? config.buttonCopyForeground : Color.BLACK);
@@ -631,7 +631,7 @@ public class BrowserDialog implements IDragDropInstigator {
 			}
 		});
 
-		moveMessageMsgButton = new JButton("Move");
+		moveMessageMsgButton = new JButton(config != null ? config.formatButtonText("➜", "Move") : "Move");
 		moveMessageMsgButton.setEnabled(false);
 		moveMessageMsgButton.setBackground(config != null ? config.buttonMove : new Color(255, 245, 220)); // Soft yellow background
 		moveMessageMsgButton.setForeground(config != null ? config.buttonMoveForeground : Color.BLACK);
@@ -646,7 +646,7 @@ public class BrowserDialog implements IDragDropInstigator {
         preferredSize.width = 400;
         comboBox.setPreferredSize(preferredSize);
 
-        downloadMessageMsgButton = new JButton("Download");
+        downloadMessageMsgButton = new JButton(config != null ? config.formatButtonText("⤓", "Download") : "Download");
         downloadMessageMsgButton.setEnabled(false);
         downloadMessageMsgButton.setBackground(config != null ? config.buttonRestore : new Color(220, 255, 220)); // Soft green background
         downloadMessageMsgButton.setForeground(config != null ? config.buttonRestoreForeground : Color.BLACK);
@@ -711,7 +711,8 @@ public class BrowserDialog implements IDragDropInstigator {
 		
 		// Wrap text checkbox
 		wrapTextCheckBox = new JCheckBox("Wrap Text");
-		wrapTextCheckBox.setFont(new Font(fontFamily, Font.PLAIN, 14));
+		int wrapTextFontSize = config != null ? config.buttonFontSize : 14;
+		wrapTextCheckBox.setFont(new Font(fontFamily, Font.PLAIN, wrapTextFontSize));
 		wrapTextCheckBox.setSelected(false);
 		wrapTextCheckBox.addActionListener(new ActionListener() {
 			@Override
@@ -734,7 +735,9 @@ public class BrowserDialog implements IDragDropInstigator {
 		textArea = new JTextArea(4, 40); // Reduced to 4 rows for compact display
 		textArea.setLineWrap(false);
 		textArea.setWrapStyleWord(true);
-		textArea.setFont(new java.awt.Font("Monospaced", Font.PLAIN, 12));
+		String textAreaFontFamily = config != null && config.textAreaFontFamily != null ? config.textAreaFontFamily : "Monospaced";
+		int textAreaFontSize = config != null ? config.textAreaFontSize : 12;
+		textArea.setFont(new java.awt.Font(textAreaFontFamily, Font.PLAIN, textAreaFontSize));
 		
 		// Wrap textArea in scroll pane for proper line wrapping
 		textAreaScrollPane = new JScrollPane(textArea);
