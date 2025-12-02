@@ -270,16 +270,8 @@ public class Config {
 				downloadFolder = systemDoc.getString("downloadFolder");
 			}
 			
-			// Load UI configuration
-			if (systemDoc.has("ui")) {
-				JSONObject uiConfig = systemDoc.getJSONObject("ui");
-				
-				// Try to load from profile first, fallback to legacy config
-				loadUIProfile(uiConfig);
-			} else {
-				logger.info("UI Profile: No UI configuration found in system.json, using defaults");
-				System.out.println("UI Profile: No UI configuration found in system.json, using defaults");
-			}
+			// Load UI profile
+			loadUIProfile(systemDoc);
 		} catch (JSONException e) {
 			throw new BrokerException("Failed to process system configuration file '" + systemConfigFile + "': " + e.getMessage());
 		}
@@ -456,121 +448,90 @@ public class Config {
 	}
 	
 	/**
-	 * Validate that a profile exists and has required sections
-	 * @param profiles Profiles object from config
-	 * @param profileName Name of profile to validate
-	 * @throws BrokerException if profile is invalid or missing required sections
+	 * Load a UI profile from a separate JSON file
+	 * @param profileName Name of the profile to load (e.g., "Modern", "Clean", "Dark")
+	 * @return JSONObject containing the profile configuration
+	 * @throws BrokerException if the profile file cannot be loaded or parsed
 	 */
-	private void validateProfile(JSONObject profiles, String profileName) throws BrokerException {
-		if (!profiles.has(profileName)) {
-			// List available profiles for helpful error message
-			StringBuilder availableProfiles = new StringBuilder();
-			try {
-				java.util.Iterator<String> keys = profiles.keys();
-				while (keys.hasNext()) {
-					if (availableProfiles.length() > 0) {
-						availableProfiles.append(", ");
-					}
-					availableProfiles.append("'").append(keys.next()).append("'");
-				}
-			} catch (Exception e) {
-				availableProfiles.append("(unable to list)");
-			}
-			
-			throw new BrokerException(
-				"UI Profile '" + profileName + "' not found in system.json. " +
-				"Available profiles: " + (availableProfiles.length() > 0 ? availableProfiles.toString() : "none") + ". " +
-				"Please check the 'profiles' section in config/system.json or use a valid profile name."
-			);
+	private JSONObject loadProfileFromFile(String profileName) throws BrokerException {
+		String profileFile = "config/ui/" + profileName + ".json";
+		String fileContent = null;
+		try {
+			fileContent = FileUtils.loadFile(profileFile);
+		} catch (IOException e) {
+			throw new BrokerException("Failed to read UI profile file '" + profileFile + "': " + e.getMessage());
 		}
-		
-		JSONObject profile = profiles.getJSONObject(profileName);
-		
-		// Validate required sections
-		if (!profile.has("font")) {
-			logger.warn("UI Profile '{}': Missing 'font' section, using defaults", profileName);
+		JSONObject profile = null;
+		try {
+			profile = new JSONObject(fileContent);
+		} catch (JSONException e) {
+			throw new BrokerException("Failed to parse UI profile file '" + profileFile + "': " + e.getMessage());
 		}
-		if (!profile.has("colors")) {
-			logger.warn("UI Profile '{}': Missing 'colors' section, using defaults", profileName);
-		}
+		return profile;
 	}
 	
 	/**
 	 * Load UI profile from configuration
-	 * Supports both profile-based and legacy single config formats
-	 * @param uiConfig UI configuration object from system.json
+	 * Loads profile from separate JSON file based on uiProfile setting in system.json
+	 * Falls back to default.json if the selected profile cannot be loaded
+	 * @param systemDoc System configuration object from system.json
 	 * @throws BrokerException if configuration is invalid
 	 */
-	private void loadUIProfile(JSONObject uiConfig) throws BrokerException {
+	private void loadUIProfile(JSONObject systemDoc) throws BrokerException {
 		try {
 			// Determine which profile to use
-			String profileName = determineProfile(uiConfig);
+			String profileName = determineProfile(systemDoc);
 			
-			// Try to load from profile first
-			if (uiConfig.has("profiles")) {
-				JSONObject profiles = uiConfig.getJSONObject("profiles");
-				
-				// Validate profile exists
-				validateProfile(profiles, profileName);
-				
-				JSONObject profile = profiles.getJSONObject(profileName);
+			JSONObject profile = null;
+			boolean loadedFromDefault = false;
+			
+			// Try to load the selected profile
+			try {
+				profile = loadProfileFromFile(profileName);
 				selectedProfile = profileName;
-				
-				// Log profile selection
-				String description = profile.has("description") ? profile.getString("description") : "";
-				String logMessage = "UI Profile selected: '" + profileName + "'" + 
-					(description.isEmpty() ? "" : " - " + description);
-				if (commandLineProfileOverride != null) {
-					logMessage += " (via command-line override)";
+			} catch (BrokerException e) {
+				// If loading the selected profile fails, try to load default.json
+				logger.warn("UI Profile: Failed to load profile '{}': {}. Attempting to load default profile.", profileName, e.getMessage());
+				try {
+					profile = loadProfileFromFile("default");
+					selectedProfile = "default";
+					loadedFromDefault = true;
+				} catch (BrokerException defaultException) {
+					// If default.json also fails, throw the original error
+					throw new BrokerException("Failed to load UI profile '" + profileName + "' and default profile: " + defaultException.getMessage());
 				}
-				logger.info(logMessage);
-				System.out.println("=================================================================");
-				System.out.println(logMessage);
-				System.out.println("=================================================================");
-				
-				// Load buttonTextIcons setting
-				if (profile.has("buttonTextIcons")) {
-					buttonTextIcons = profile.getBoolean("buttonTextIcons");
-				}
-				
-				// Load font and colors from profile
-				if (profile.has("font")) {
-					loadFontConfig(profile.getJSONObject("font"));
-				} else {
-					logger.warn("UI Profile '{}': No 'font' section found, using defaults", profileName);
-				}
-				if (profile.has("colors")) {
-					loadColorConfig(profile.getJSONObject("colors"));
-				} else {
-					logger.warn("UI Profile '{}': No 'colors' section found, using defaults", profileName);
-				}
-			} else if (uiConfig.has("font") && uiConfig.has("colors")) {
-				// Fallback to legacy single config format
-				// If command-line override was specified but profiles section doesn't exist, warn user
-				if (commandLineProfileOverride != null) {
-					logger.warn("UI Profile: Command-line override '{}' specified but 'profiles' section not found in system.json. Using legacy config format instead.", commandLineProfileOverride);
-				}
-				selectedProfile = "legacy";
-				String logMessage = "UI Profile: Using legacy single config format (no profiles section found)";
-				logger.info(logMessage);
-				System.out.println("=================================================================");
-				System.out.println(logMessage);
-				System.out.println("=================================================================");
-				loadFontConfig(uiConfig.getJSONObject("font"));
-				loadColorConfig(uiConfig.getJSONObject("colors"));
+			}
+			
+			// Log profile selection
+			String description = profile.has("description") ? profile.getString("description") : "";
+			String logMessage = "UI Profile selected: '" + selectedProfile + "'" + 
+				(description.isEmpty() ? "" : " - " + description);
+			if (loadedFromDefault) {
+				logMessage += " (fallback from '" + profileName + "')";
+			}
+			if (commandLineProfileOverride != null) {
+				logMessage += " (via command-line override)";
+			}
+			logger.info(logMessage);
+			System.out.println("=================================================================");
+			System.out.println(logMessage);
+			System.out.println("=================================================================");
+			
+			// Load buttonTextIcons setting
+			if (profile.has("buttonTextIcons")) {
+				buttonTextIcons = profile.getBoolean("buttonTextIcons");
+			}
+			
+			// Load font and colors from profile
+			if (profile.has("font")) {
+				loadFontConfig(profile.getJSONObject("font"));
 			} else {
-				// No profile or legacy config found, use defaults
-				// If command-line override was specified but profiles section doesn't exist, warn user
-				if (commandLineProfileOverride != null) {
-					logger.warn("UI Profile: Command-line override '{}' specified but 'profiles' section not found in system.json. Using defaults instead.", commandLineProfileOverride);
-				}
-				selectedProfile = "default";
-				String logMessage = "UI Profile: Using default values (no profile or legacy config found)";
-				logger.info(logMessage);
-				System.out.println("=================================================================");
-				System.out.println(logMessage);
-				System.out.println("=================================================================");
-				// Defaults are already set in field declarations
+				logger.warn("UI Profile '{}': No 'font' section found, using defaults", selectedProfile);
+			}
+			if (profile.has("colors")) {
+				loadColorConfig(profile.getJSONObject("colors"));
+			} else {
+				logger.warn("UI Profile '{}': No 'colors' section found, using defaults", selectedProfile);
 			}
 		} catch (JSONException e) {
 			throw new BrokerException("Failed to load UI profile: " + e.getMessage());
@@ -590,21 +551,21 @@ public class Config {
 	
 	/**
 	 * Determine which profile to use based on configuration
-	 * Priority: 1. Command-line override, 2. Config file setting, 3. Default
-	 * @param uiConfig UI configuration object
+	 * Priority: 1. Command-line override, 2. Config file setting (uiProfile), 3. Default
+	 * @param systemDoc System configuration object from system.json
 	 * @return Profile name to use
 	 */
-	private String determineProfile(JSONObject uiConfig) {
+	private String determineProfile(JSONObject systemDoc) {
 		// Priority 1: Command-line override (highest priority)
 		if (commandLineProfileOverride != null && !commandLineProfileOverride.isEmpty()) {
 			logger.info("UI Profile: Using command-line override '{}'", commandLineProfileOverride);
 			return commandLineProfileOverride;
 		}
 		
-		// Priority 2: Config file setting
+		// Priority 2: Config file setting (uiProfile at root level)
 		try {
-			if (uiConfig.has("profile")) {
-				String profile = uiConfig.getString("profile");
+			if (systemDoc.has("uiProfile")) {
+				String profile = systemDoc.getString("uiProfile");
 				if (profile != null && !profile.isEmpty() && !profile.equals("auto")) {
 					logger.debug("UI Profile: Explicitly set to '{}'", profile);
 					return profile;
@@ -614,7 +575,7 @@ public class Config {
 			}
 		} catch (JSONException e) {
 			// Ignore and use default
-			logger.warn("UI Profile: Error reading profile setting, using default: {}", e.getMessage());
+			logger.warn("UI Profile: Error reading uiProfile setting, using default: {}", e.getMessage());
 		}
 		
 		// Priority 3: Default profile

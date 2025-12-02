@@ -1,0 +1,42 @@
+{
+	"description": "Dark theme for all platforms (uses FlatDarkLaf default colors)",
+	"buttonTextIcons": true,
+	"font": {
+		"fontFamily": null,
+		"defaultFontFamilyFallback": "System",
+		"defaultFontSize": 14,
+		"headerFontSize": 16,
+		"labelFontSize": 16,
+		"buttonFontSize": 14,
+		"tableFontSize": 14,
+		"smallFontSize": 11,
+		"largeFontSize": 20,
+		"statusFontSize": 22,
+		"textAreaFontFamily": "Monospaced",
+		"textAreaFontSize": 12
+	},
+	"colors": {
+		"rowEvenBackground": [0, 0, 0],
+		"rowOddBackground": [40, 40, 40],
+		"rowSelectedBackground": [40, 80, 40],
+		"rowForeground": [220, 220, 220],
+		"rowSelectedForeground": [255, 255, 255],
+		"buttonRefresh": [50, 50, 50],
+		"buttonRefreshForeground": [240, 240, 240],
+		"buttonFilter": [50, 50, 50],
+		"buttonFilterForeground": [240, 240, 240],
+		"buttonNavigation": [50, 50, 50],
+		"buttonNavigationForeground": [240, 240, 240],
+		"buttonDelete": [70, 40, 40],
+		"buttonDeleteForeground": [255, 200, 200],
+		"buttonCopy": [50, 50, 50],
+		"buttonCopyForeground": [240, 240, 240],
+		"buttonMove": [50, 50, 50],
+		"buttonMoveForeground": [240, 240, 240],
+		"buttonRestore": [40, 60, 40],
+		"buttonRestoreForeground": [200, 255, 200],
+		"buttonExit": [70, 40, 40],
+		"buttonExitForeground": [255, 200, 200]
+	}
+}
+

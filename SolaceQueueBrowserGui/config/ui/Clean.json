@@ -1,0 +1,44 @@
+{
+	"description": "macOS-optimized clean and minimal design",
+	"buttonTextIcons": false,
+	"font": {
+		"fontFamily": null,
+		"defaultFontFamilyFallback": "SF Pro Display",
+		"defaultFontSize": 13,
+		"headerFontSize": 15,
+		"labelFontSize": 15,
+		"buttonFontSize": 13,
+		"tableFontSize": 13,
+		"smallFontSize": 10,
+		"largeFontSize": 18,
+		"statusFontSize": 20,
+		"textAreaFontFamily": "SF Mono",
+		"textAreaFontSize": 11
+	},
+	"colors": {
+		"rowEvenBackground": [255, 255, 255],
+		"rowOddBackground": [220, 220, 220],
+		"rowSelectedBackground": [200, 220, 255],
+		"rowForeground": [0, 0, 0],
+		"rowSelectedForeground": [0, 0, 0],
+		"textForeground": [0, 0, 0],
+		"gridColor": [230, 230, 230],
+		"buttonRefresh": [240, 248, 255],
+		"buttonRefreshForeground": [0, 0, 0],
+		"buttonFilter": [245, 240, 255],
+		"buttonFilterForeground": [0, 0, 0],
+		"buttonNavigation": [240, 248, 255],
+		"buttonNavigationForeground": [0, 0, 0],
+		"buttonDelete": [255, 235, 235],
+		"buttonDeleteForeground": [200, 0, 0],
+		"buttonCopy": [235, 245, 255],
+		"buttonCopyForeground": [0, 0, 0],
+		"buttonMove": [255, 250, 235],
+		"buttonMoveForeground": [0, 0, 0],
+		"buttonRestore": [235, 255, 235],
+		"buttonRestoreForeground": [0, 100, 0],
+		"buttonExit": [255, 200, 200],
+		"buttonExitForeground": [150, 0, 0]
+	}
+}
+
