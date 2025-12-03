@@ -1119,18 +1119,10 @@ public class BrowserDialog implements IDragDropInstigator {
 			JOptionPane.showMessageDialog(dialog, message, 
 				"Operation Complete", failedIds.isEmpty() ? JOptionPane.INFORMATION_MESSAGE : JOptionPane.WARNING_MESSAGE);
 			
-			setStatus(ids.size() + " messages were " + action+ " to " + selectedTargetQueue);
+			setStatus(successfulIds.size() + " messages were " + action+ " to " + selectedTargetQueue);
 
-			// Update the display to remove all moved messages
-			if (deleteFromSource) {
-				// Update estimated total message count by subtracting moved messages
-				estimatedTotalMessageCount = Math.max(0, estimatedTotalMessageCount - successfulIds.size());
-				updateDisplayAfterMultipleDeletes(successfulIds);
-				// Recalculation is done in updateDisplayAfterMultipleDeletes
-			} else {
-				// For copy operations, unselect the messages
-				unselectMessages(ids);
-			}
+			// Refresh the page to show updated state and clear selections
+			onRefresh();
 		}
 		else {
 			String id = ids.get(0);
@@ -1158,6 +1150,8 @@ public class BrowserDialog implements IDragDropInstigator {
 					"Operation Failed", JOptionPane.ERROR_MESSAGE);
 				logger.error("Failed to " + actionVerb + " message " + id, e);
 			}
+			// Refresh after operation (success or failure) to clear selections
+			onRefresh();
 		}
 	}
 	private void moveOrCopyMessage(String id, boolean deleteFromSource, boolean showStatus) throws SempException {
@@ -1387,10 +1381,10 @@ public class BrowserDialog implements IDragDropInstigator {
 			JOptionPane.showMessageDialog(dialog, message, 
 				"Download Complete", failedIds.isEmpty() ? JOptionPane.INFORMATION_MESSAGE : JOptionPane.WARNING_MESSAGE);
 			
-			setStatus(ids.size() + " messages were downloaded to " + downloadPath);
+			setStatus(successfulIds.size() + " messages were downloaded to " + downloadPath);
 			
-			// Unselect the downloaded messages
-			unselectMessages(ids);
+			// Refresh the page to show updated state and clear selections
+			onRefresh();
 		}
 		else {
 			String id = ids.get(0);
@@ -1412,6 +1406,8 @@ public class BrowserDialog implements IDragDropInstigator {
 					"Download Failed", JOptionPane.ERROR_MESSAGE);
 				logger.error("Failed to download message " + id, e);
 			}
+			// Refresh after download (success or failure) to clear selections
+			onRefresh();
 		}
 	}
 	
@@ -1640,22 +1636,6 @@ public class BrowserDialog implements IDragDropInstigator {
 	    		}
         	}
         	
-        	// Reset selection state and update UI after all deletions
-        	currentSelectAllState = eSelectAllState.eIndeterminant;
-        	
-        	// Auto-select the first row if there are messages remaining
-        	if (table.getRowCount() > 0) {
-        		autoSelectFirstRow();
-        	} else {
-        		clearMessageSelection();
-        	}
-        	
-        	// Update estimated total message count by subtracting deleted messages
-        	estimatedTotalMessageCount = Math.max(0, estimatedTotalMessageCount - successfulIds.size());
-        	
-        	// Recalculate page count after deletions
-        	recalculateEstimatedPageCount();
-        	
         	// Show confirmation dialog
         	String message;
         	if (failedIds.isEmpty()) {
@@ -1714,6 +1694,9 @@ public class BrowserDialog implements IDragDropInstigator {
         	} else {
         		setStatus(successfulIds.size() + " messages were deleted.");
         	}
+        	
+        	// Refresh the page to show updated state and clear selections
+        	onRefresh();
         	
 //        	for (Integer i : all) {
 //            	//doDelete(id);
