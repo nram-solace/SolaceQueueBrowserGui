@@ -21,40 +21,17 @@
             </includes>
         </fileSet>
         
-        <!-- Include required config files -->
+        <!-- Include ALL config files -->
         <fileSet>
             <directory>${project.basedir}/config</directory>
             <outputDirectory>config</outputDirectory>
             <includes>
-                <include>system.json</include>
-                <include>log4j2.properties</include>
-                <include>*.png</include>
+                <include>**/*</include>
             </includes>
             <excludes>
                 <exclude>local-dev.json</exclude>
-                <exclude>sampleBrowserConfig.json</exclude>
                 <exclude>sig.txt</exclude>
             </excludes>
-        </fileSet>
-        
-        <!-- Include user config templates (optional, users can add their own) -->
-        <fileSet>
-            <directory>${project.basedir}/config</directory>
-            <outputDirectory>config</outputDirectory>
-            <includes>
-                <include>sample-config.json</include>
-                <include>solace-cloud.json</include>
-            </includes>
-            <fileMode>0644</fileMode>
-        </fileSet>
-        
-        <!-- Include UI profile files -->
-        <fileSet>
-            <directory>${project.basedir}/config/ui</directory>
-            <outputDirectory>config/ui</outputDirectory>
-            <includes>
-                <include>*.json</include>
-            </includes>
             <fileMode>0644</fileMode>
         </fileSet>
         
@@ -95,6 +72,26 @@
         <!-- Include img folder at root level for README.md references -->
         <fileSet>
             <directory>${project.basedir}/docs/img</directory>
+            <outputDirectory>img</outputDirectory>
+            <includes>
+                <include>**</include>
+            </includes>
+            <filtered>false</filtered>
+        </fileSet>
+        
+        <!-- Include img folder from project root -->
+        <fileSet>
+            <directory>${project.basedir}/../img</directory>
+            <outputDirectory>img</outputDirectory>
+            <includes>
+                <include>**</include>
+            </includes>
+            <filtered>false</filtered>
+        </fileSet>
+        
+        <!-- Include img folder from SolaceQueueBrowserGui -->
+        <fileSet>
+            <directory>${project.basedir}/img</directory>
             <outputDirectory>img</outputDirectory>
             <includes>
                 <include>**</include>

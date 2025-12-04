@@ -74,3 +74,4 @@ out/**
 tmp/**
 .#specs/**
 .password
+.local/**
