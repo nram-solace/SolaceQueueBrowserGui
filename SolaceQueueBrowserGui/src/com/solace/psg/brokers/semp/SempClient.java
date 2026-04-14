@@ -3,6 +3,7 @@ package com.solace.psg.brokers.semp;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -533,6 +534,27 @@ public class SempClient {
 			throw new SempException(errorMsg);
 		}
 	}
+
+	/**
+	 * Reads the next-page cursor from {@code meta.paging}. SEMP v2 documents {@code cursorQuery};
+	 * {@code nextPageCursor} is accepted as a fallback for non-standard responses.
+	 *
+	 * @return opaque cursor string for the next request's {@code cursor} query parameter, or null if none
+	 */
+	private String nextCursorFromPaging(JSONObject paging) {
+		if (paging == null) {
+			return null;
+		}
+		String c = paging.optString("cursorQuery", "");
+		if (c.isEmpty()) {
+			c = paging.optString("nextPageCursor", "");
+		}
+		return c.isEmpty() ? null : c;
+	}
+
+	private String encodeCursorQueryParam(String cursor) {
+		return URLEncoder.encode(cursor, StandardCharsets.UTF_8);
+	}
 	
 	/**
 	 * Retrieves queue information for all queues in bulk.
@@ -581,7 +603,7 @@ public class SempClient {
 				String delim = pageResource.contains("?") ? "&" : "?";
 				pageResource = pageResource + delim + "count=100";
 				if (cursor != null) {
-					pageResource = pageResource + "&cursor=" + cursor;
+					pageResource = pageResource + "&cursor=" + encodeCursorQueryParam(cursor);
 				}
 				
 				String pageResponse = this.getSempV2(pageResource, ePaginationBehavior.eNone);
@@ -621,7 +643,7 @@ public class SempClient {
 					JSONObject meta = pageObj.getJSONObject("meta");
 					if (meta.has("paging")) {
 						JSONObject paging = meta.getJSONObject("paging");
-						cursor = paging.optString("nextPageCursor", null);
+						cursor = nextCursorFromPaging(paging);
 						hasMore = (cursor != null && !cursor.isEmpty());
 					} else {
 						hasMore = false;
@@ -643,7 +665,7 @@ public class SempClient {
 				String delim = pageResource.contains("?") ? "&" : "?";
 				pageResource = pageResource + delim + "count=100";
 				if (cursor != null) {
-					pageResource = pageResource + "&cursor=" + cursor;
+					pageResource = pageResource + "&cursor=" + encodeCursorQueryParam(cursor);
 				}
 				
 				String pageResponse = this.getSempV2Monitoring(pageResource, ePaginationBehavior.eNone);
@@ -666,7 +688,7 @@ public class SempClient {
 					JSONObject meta = pageObj.getJSONObject("meta");
 					if (meta.has("paging")) {
 						JSONObject paging = meta.getJSONObject("paging");
-						cursor = paging.optString("nextPageCursor", null);
+						cursor = nextCursorFromPaging(paging);
 						hasMore = (cursor != null && !cursor.isEmpty());
 					} else {
 						hasMore = false;
@@ -689,7 +711,7 @@ public class SempClient {
 				String delim = pageResource.contains("?") ? "&" : "?";
 				pageResource = pageResource + delim + "count=100";
 				if (cursor != null) {
-					pageResource = pageResource + "&cursor=" + cursor;
+					pageResource = pageResource + "&cursor=" + encodeCursorQueryParam(cursor);
 				}
 				
 				String pageResponse = this.getSempV2Monitoring(pageResource, ePaginationBehavior.eNone);
@@ -729,7 +751,7 @@ public class SempClient {
 					JSONObject meta = pageObj.getJSONObject("meta");
 					if (meta.has("paging")) {
 						JSONObject paging = meta.getJSONObject("paging");
-						cursor = paging.optString("nextPageCursor", null);
+						cursor = nextCursorFromPaging(paging);
 						hasMore = (cursor != null && !cursor.isEmpty());
 					} else {
 						hasMore = false;
