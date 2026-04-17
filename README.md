@@ -1,6 +1,6 @@
 # Solace Queue Browser GUI
 
-![Project Logo](./SolaceQueueBrowserGui/config/queueBrowserIcon.png "Queue Browser Logo")
+![Project Logo](./SolaceQueueBrowserGui/img/queueBrowserIcon.png "Queue Browser Logo")
 
 A desktop application for browsing and managing Solace message queues through an intuitive graphical interface.
 
